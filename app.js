@@ -407,13 +407,8134 @@ function setState(patch) {
 }
 
 function renderTabs() {
-  tabsEl.innerHTML = tabs
-    .map((tab) => `<button class="tab-btn ${state.activeTab === tab ? 'active' : ''}" data-tab="${tab}">${tab}</button>`)
-    .join('');
+  tabsEl.innerHTML = tabs.map((tab) => `<button class="tab-btn ${state.activeTab === tab ? 'active' : ''}" data-tab="${tab}">${tab}</button>`).join('');
+  tabsEl.querySelectorAll('.tab-btn').forEach((btn) => btn.addEventListener('click', () => setState({ activeTab: btn.dataset.tab })));
+}
 
-  tabsEl.querySelectorAll('.tab-btn').forEach((btn) => {
-    btn.addEventListener('click', () => setState({ activeTab: btn.dataset.tab }));
+function getAssetById(id) {
+  return state.brandedAssets.find((asset) => asset.id === Number(id));
+}
+
+function getDimensionRatio(dimension) {
+  const [w, h] = dimension.split('x').map(Number);
+  return w / h;
+}
+
+function getFilteredAndSortedAssets() {
+  const filtered = state.brandedAssets.filter((asset) => {
+    const folderMatch = state.brandedAssetsFolderFilter === 'All folders' || asset.folder === state.brandedAssetsFolderFilter;
+    const dimensionMatch = state.brandedAssetsDimensionFilter === 'All dimensions' || asset.dimension === state.brandedAssetsDimensionFilter;
+    return folderMatch && dimensionMatch;
   });
+
+  return filtered.sort((a, b) => {
+    if (state.brandedAssetsSort === 'name-asc') return a.name.localeCompare(b.name);
+    if (state.brandedAssetsSort === 'name-desc') return b.name.localeCompare(a.name);
+    if (state.brandedAssetsSort === 'oldest') return new Date(a.createdAt) - new Date(b.createdAt);
+    if (state.brandedAssetsSort === 'dimension') return a.dimension.localeCompare(b.dimension);
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+
+  return filtered.sort((a, b) => {
+    if (state.brandedAssetsSort === 'name-asc') return a.name.localeCompare(b.name);
+    if (state.brandedAssetsSort === 'name-desc') return b.name.localeCompare(a.name);
+    if (state.brandedAssetsSort === 'oldest') return new Date(a.createdAt) - new Date(b.createdAt);
+    if (state.brandedAssetsSort === 'dimension') return a.dimension.localeCompare(b.dimension);
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ currentFolderId: folderId });
+}
+
+function renderFolderTree(folderId, depth = 0) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getChildren(folderId).filter((child) => child.type === 'folder');
+  const isRenaming = state.renamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      ${isRenaming
+        ? `<input class="tree-folder rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" />`
+        : `<button class="tree-folder ${state.currentFolderId === folder.id ? 'active' : ''}" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      ${childFolders.map((child) => renderFolderTree(child.id, depth + 1)).join('')}
+    </div>
+  `;
+}
+
+function fileExplorerView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getCurrentFolder();
+  const children = getChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.assetSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderFolderTree(state.explorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="assetSearchInput" value="${state.assetSearchQuery}" placeholder="Search assets" />
+            <button id="createFolderBtn" class="action-btn">Create Folder</button>
+            <button id="deleteFolderBtn" class="action-btn" ${currentFolder.id === state.explorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="brandAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.renamingFolderId === folder.id ? `<div class="explorer-row folder-row"><input class="rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" /><span>Folder</span><span>--</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row folder-row" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>--</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<button class="explorer-row file-row" data-asset-id="${file.id}"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${state.templates.length ? `<div class="template-strip"><h4>Saved Templates</h4>${state.templates.filter((template) => !fileSearch || template.name.toLowerCase().includes(fileSearch)).map((template) => `<button class="explorer-row template-row" data-template-id="${template.id}"><span>🧩 ${template.name}</span><span>Template</span><span>${template.templateSize || template.dimension}</span><span>${new Date(template.createdAt).toLocaleDateString()}</span></button>`).join('')}</div>` : ''}
+          ${!folders.length && !files.length && !state.templates.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="ownersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="editorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="viewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+
+function getTemplateNodeById(id) {
+  return state.templateExplorer.nodes.find((node) => node.id === id);
+}
+
+function getTemplateCurrentFolder() {
+  return getTemplateNodeById(state.templateCurrentFolderId) || getTemplateNodeById(state.templateExplorer.rootId);
+}
+
+function getTemplateChildren(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getTemplateNodeById(id)).filter(Boolean);
+}
+
+function getTemplateFolderPath(folderId) {
+  const path = [];
+  let current = getTemplateNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getTemplateNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ currentFolderId: folderId });
+}
+
+
+function updateTemplateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ templateExplorer: nextExplorer });
+}
+
+function createTemplateSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getTemplateCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getTemplateChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    templateExplorer: nextExplorer,
+    templateCurrentFolderId: newFolder.id,
+  });
+}
+
+function renameTemplateFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const siblings = getTemplateChildren(folder.parentId || state.templateExplorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateTemplateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startTemplateFolderRename(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+  setState({ templateRenamingFolderId: folderId, templateRenamingFolderValue: folder.name });
+}
+
+function commitTemplateFolderRename(folderId) {
+  if (!folderId || state.templateRenamingFolderId !== folderId) return;
+  renameTemplateFolder(folderId, state.templateRenamingFolderValue);
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function cancelTemplateFolderRename() {
+  if (!state.templateRenamingFolderId) return;
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function deleteTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ templateExplorer: nextExplorer, templateCurrentFolderId: fallbackFolderId, templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function setTemplateFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue.split(',').map((item) => item.trim()).filter(Boolean);
+  updateTemplateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ templateCurrentFolderId: folderId });
+}
+
+function renderFolderTree(folderId, depth = 0) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.designTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.renamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" />`
+        : `<button class="tree-folder ${state.currentFolderId === folder.id ? 'active' : ''}" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function renderTemplateFolderTree(folderId, depth = 0) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getTemplateChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.templateTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.templateRenamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-template-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" />`
+        : `<button class="tree-folder ${state.templateCurrentFolderId === folder.id ? 'active' : ''}" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderTemplateFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function templateLibraryView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getTemplateCurrentFolder();
+  const children = getTemplateChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.templateSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getTemplateFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderTemplateFolderTree(state.templateExplorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-template-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="templateSearchInput" value="${state.templateSearchQuery}" placeholder="Search templates" />
+            <button id="templateCreateFolderBtn" class="action-btn">Create Folder</button>
+            <button id="templateDeleteFolderBtn" class="action-btn" ${currentFolder.id === state.templateExplorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="templateAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.templateRenamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" /><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<div class="explorer-row"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></div>`).join('')}
+          ${!folders.length && !files.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="templateOwnersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="templateEditorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="templateViewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function fileExplorerView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getCurrentFolder();
+  const children = getChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.assetSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderFolderTree(state.explorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="assetSearchInput" value="${state.assetSearchQuery}" placeholder="Search assets" />
+            <button id="createFolderBtn" class="action-btn">Create Folder</button>
+            <button id="deleteFolderBtn" class="action-btn" ${currentFolder.id === state.explorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="brandAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.renamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" /><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<button class="explorer-row file-row" data-asset-id="${file.id}"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${state.templates.length ? `<div class="template-strip"><h4>Saved Templates</h4>${state.templates.filter((template) => !fileSearch || template.name.toLowerCase().includes(fileSearch)).map((template) => `<button class="explorer-row template-row" data-template-id="${template.id}"><span>🧩 ${template.name}</span><span>Template</span><span>${template.templateSize || template.dimension}</span><span>${new Date(template.createdAt).toLocaleDateString()}</span></button>`).join('')}</div>` : ''}
+          ${!folders.length && !files.length && !state.templates.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="ownersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="editorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="viewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+
+function getTemplateNodeById(id) {
+  return state.templateExplorer.nodes.find((node) => node.id === id);
+}
+
+function getTemplateCurrentFolder() {
+  return getTemplateNodeById(state.templateCurrentFolderId) || getTemplateNodeById(state.templateExplorer.rootId);
+}
+
+function getTemplateChildren(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getTemplateNodeById(id)).filter(Boolean);
+}
+
+function getTemplateFolderPath(folderId) {
+  const path = [];
+  let current = getTemplateNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getTemplateNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ currentFolderId: folderId });
+}
+
+
+function updateTemplateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ templateExplorer: nextExplorer });
+}
+
+function createTemplateSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getTemplateCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getTemplateChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    templateExplorer: nextExplorer,
+    templateCurrentFolderId: newFolder.id,
+  });
+}
+
+function renameTemplateFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const siblings = getTemplateChildren(folder.parentId || state.templateExplorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateTemplateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startTemplateFolderRename(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+  setState({ templateRenamingFolderId: folderId, templateRenamingFolderValue: folder.name });
+}
+
+function commitTemplateFolderRename(folderId) {
+  if (!folderId || state.templateRenamingFolderId !== folderId) return;
+  renameTemplateFolder(folderId, state.templateRenamingFolderValue);
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function cancelTemplateFolderRename() {
+  if (!state.templateRenamingFolderId) return;
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function deleteTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ templateExplorer: nextExplorer, templateCurrentFolderId: fallbackFolderId, templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function setTemplateFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue.split(',').map((item) => item.trim()).filter(Boolean);
+  updateTemplateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ templateCurrentFolderId: folderId });
+}
+
+function renderFolderTree(folderId, depth = 0) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.designTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.renamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" />`
+        : `<button class="tree-folder ${state.currentFolderId === folder.id ? 'active' : ''}" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function renderTemplateFolderTree(folderId, depth = 0) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getTemplateChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.templateTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.templateRenamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-template-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" />`
+        : `<button class="tree-folder ${state.templateCurrentFolderId === folder.id ? 'active' : ''}" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderTemplateFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function templateLibraryView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getTemplateCurrentFolder();
+  const children = getTemplateChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.templateSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getTemplateFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderTemplateFolderTree(state.templateExplorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-template-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="templateSearchInput" value="${state.templateSearchQuery}" placeholder="Search templates" />
+            <button id="templateCreateFolderBtn" class="action-btn">Create Folder</button>
+            <button id="templateDeleteFolderBtn" class="action-btn" ${currentFolder.id === state.templateExplorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="templateAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.templateRenamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" /><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<div class="explorer-row"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></div>`).join('')}
+          ${!folders.length && !files.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="templateOwnersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="templateEditorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="templateViewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function fileExplorerView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getCurrentFolder();
+  const children = getChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.assetSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderFolderTree(state.explorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="assetSearchInput" value="${state.assetSearchQuery}" placeholder="Search assets" />
+            <button id="createFolderBtn" class="action-btn">Create Folder</button>
+            <button id="deleteFolderBtn" class="action-btn" ${currentFolder.id === state.explorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="brandAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.renamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" /><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<button class="explorer-row file-row" data-asset-id="${file.id}"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${state.templates.length ? `<div class="template-strip"><h4>Saved Templates</h4>${state.templates.filter((template) => !fileSearch || template.name.toLowerCase().includes(fileSearch)).map((template) => `<button class="explorer-row template-row" data-template-id="${template.id}"><span>🧩 ${template.name}</span><span>Template</span><span>${template.templateSize || template.dimension}</span><span>${new Date(template.createdAt).toLocaleDateString()}</span></button>`).join('')}</div>` : ''}
+          ${!folders.length && !files.length && !state.templates.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="ownersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="editorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="viewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+
+function getTemplateNodeById(id) {
+  return state.templateExplorer.nodes.find((node) => node.id === id);
+}
+
+function getTemplateCurrentFolder() {
+  return getTemplateNodeById(state.templateCurrentFolderId) || getTemplateNodeById(state.templateExplorer.rootId);
+}
+
+function getTemplateChildren(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getTemplateNodeById(id)).filter(Boolean);
+}
+
+function getTemplateFolderPath(folderId) {
+  const path = [];
+  let current = getTemplateNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getTemplateNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ currentFolderId: folderId });
+}
+
+
+function updateTemplateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ templateExplorer: nextExplorer });
+}
+
+function createTemplateSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getTemplateCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getTemplateChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    templateExplorer: nextExplorer,
+    templateCurrentFolderId: newFolder.id,
+  });
+}
+
+function renameTemplateFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const siblings = getTemplateChildren(folder.parentId || state.templateExplorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateTemplateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startTemplateFolderRename(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+  setState({ templateRenamingFolderId: folderId, templateRenamingFolderValue: folder.name });
+}
+
+function commitTemplateFolderRename(folderId) {
+  if (!folderId || state.templateRenamingFolderId !== folderId) return;
+  renameTemplateFolder(folderId, state.templateRenamingFolderValue);
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function cancelTemplateFolderRename() {
+  if (!state.templateRenamingFolderId) return;
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function deleteTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ templateExplorer: nextExplorer, templateCurrentFolderId: fallbackFolderId, templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function setTemplateFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue.split(',').map((item) => item.trim()).filter(Boolean);
+  updateTemplateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ templateCurrentFolderId: folderId });
+}
+
+function renderFolderTree(folderId, depth = 0) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.designTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.renamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" />`
+        : `<button class="tree-folder ${state.currentFolderId === folder.id ? 'active' : ''}" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function renderTemplateFolderTree(folderId, depth = 0) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getTemplateChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.templateTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.templateRenamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-template-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" />`
+        : `<button class="tree-folder ${state.templateCurrentFolderId === folder.id ? 'active' : ''}" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderTemplateFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function templateLibraryView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getTemplateCurrentFolder();
+  const children = getTemplateChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.templateSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getTemplateFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderTemplateFolderTree(state.templateExplorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-template-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="templateSearchInput" value="${state.templateSearchQuery}" placeholder="Search templates" />
+            <button id="templateCreateFolderBtn" class="action-btn">Create Folder</button>
+            <button id="templateDeleteFolderBtn" class="action-btn" ${currentFolder.id === state.templateExplorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="templateAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.templateRenamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" /><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<div class="explorer-row"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></div>`).join('')}
+          ${!folders.length && !files.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="templateOwnersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="templateEditorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="templateViewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function fileExplorerView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getCurrentFolder();
+  const children = getChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.assetSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderFolderTree(state.explorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="assetSearchInput" value="${state.assetSearchQuery}" placeholder="Search assets" />
+            <button id="createFolderBtn" class="action-btn">Create Folder</button>
+            <button id="deleteFolderBtn" class="action-btn" ${currentFolder.id === state.explorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="brandAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.renamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" /><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<button class="explorer-row file-row" data-asset-id="${file.id}"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${state.templates.length ? `<div class="template-strip"><h4>Saved Templates</h4>${state.templates.filter((template) => !fileSearch || template.name.toLowerCase().includes(fileSearch)).map((template) => `<button class="explorer-row template-row" data-template-id="${template.id}"><span>🧩 ${template.name}</span><span>Template</span><span>${template.templateSize || template.dimension}</span><span>${new Date(template.createdAt).toLocaleDateString()}</span></button>`).join('')}</div>` : ''}
+          ${!folders.length && !files.length && !state.templates.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="ownersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="editorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="viewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+
+function getTemplateNodeById(id) {
+  return state.templateExplorer.nodes.find((node) => node.id === id);
+}
+
+function getTemplateCurrentFolder() {
+  return getTemplateNodeById(state.templateCurrentFolderId) || getTemplateNodeById(state.templateExplorer.rootId);
+}
+
+function getTemplateChildren(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getTemplateNodeById(id)).filter(Boolean);
+}
+
+function getTemplateFolderPath(folderId) {
+  const path = [];
+  let current = getTemplateNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getTemplateNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ currentFolderId: folderId });
+}
+
+
+function updateTemplateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ templateExplorer: nextExplorer });
+}
+
+function createTemplateSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getTemplateCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getTemplateChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    templateExplorer: nextExplorer,
+    templateCurrentFolderId: newFolder.id,
+  });
+}
+
+function renameTemplateFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const siblings = getTemplateChildren(folder.parentId || state.templateExplorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateTemplateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startTemplateFolderRename(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+  setState({ templateRenamingFolderId: folderId, templateRenamingFolderValue: folder.name });
+}
+
+function commitTemplateFolderRename(folderId) {
+  if (!folderId || state.templateRenamingFolderId !== folderId) return;
+  renameTemplateFolder(folderId, state.templateRenamingFolderValue);
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function cancelTemplateFolderRename() {
+  if (!state.templateRenamingFolderId) return;
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function deleteTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ templateExplorer: nextExplorer, templateCurrentFolderId: fallbackFolderId, templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function setTemplateFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue.split(',').map((item) => item.trim()).filter(Boolean);
+  updateTemplateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ templateCurrentFolderId: folderId });
+}
+
+function renderFolderTree(folderId, depth = 0) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.designTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.renamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" />`
+        : `<button class="tree-folder ${state.currentFolderId === folder.id ? 'active' : ''}" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function renderTemplateFolderTree(folderId, depth = 0) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getTemplateChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.templateTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.templateRenamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-template-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" />`
+        : `<button class="tree-folder ${state.templateCurrentFolderId === folder.id ? 'active' : ''}" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderTemplateFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function templateLibraryView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getTemplateCurrentFolder();
+  const children = getTemplateChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.templateSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getTemplateFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderTemplateFolderTree(state.templateExplorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-template-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="templateSearchInput" value="${state.templateSearchQuery}" placeholder="Search templates" />
+            <button id="templateCreateFolderBtn" class="action-btn">Create Folder</button>
+            <button id="templateDeleteFolderBtn" class="action-btn" ${currentFolder.id === state.templateExplorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="templateAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.templateRenamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" /><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<div class="explorer-row"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></div>`).join('')}
+          ${!folders.length && !files.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="templateOwnersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="templateEditorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="templateViewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function fileExplorerView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getCurrentFolder();
+  const children = getChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.assetSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderFolderTree(state.explorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="assetSearchInput" value="${state.assetSearchQuery}" placeholder="Search assets" />
+            <button id="createFolderBtn" class="action-btn">Create Folder</button>
+            <button id="deleteFolderBtn" class="action-btn" ${currentFolder.id === state.explorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="brandAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.renamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" /><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<button class="explorer-row file-row" data-asset-id="${file.id}"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${state.templates.length ? `<div class="template-strip"><h4>Saved Templates</h4>${state.templates.filter((template) => !fileSearch || template.name.toLowerCase().includes(fileSearch)).map((template) => `<button class="explorer-row template-row" data-template-id="${template.id}"><span>🧩 ${template.name}</span><span>Template</span><span>${template.templateSize || template.dimension}</span><span>${new Date(template.createdAt).toLocaleDateString()}</span></button>`).join('')}</div>` : ''}
+          ${!folders.length && !files.length && !state.templates.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="ownersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="editorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="viewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+
+function getTemplateNodeById(id) {
+  return state.templateExplorer.nodes.find((node) => node.id === id);
+}
+
+function getTemplateCurrentFolder() {
+  return getTemplateNodeById(state.templateCurrentFolderId) || getTemplateNodeById(state.templateExplorer.rootId);
+}
+
+function getTemplateChildren(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getTemplateNodeById(id)).filter(Boolean);
+}
+
+function getTemplateFolderPath(folderId) {
+  const path = [];
+  let current = getTemplateNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getTemplateNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ currentFolderId: folderId });
+}
+
+
+function updateTemplateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ templateExplorer: nextExplorer });
+}
+
+function createTemplateSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getTemplateCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getTemplateChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    templateExplorer: nextExplorer,
+    templateCurrentFolderId: newFolder.id,
+  });
+}
+
+function renameTemplateFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const siblings = getTemplateChildren(folder.parentId || state.templateExplorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateTemplateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startTemplateFolderRename(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+  setState({ templateRenamingFolderId: folderId, templateRenamingFolderValue: folder.name });
+}
+
+function commitTemplateFolderRename(folderId) {
+  if (!folderId || state.templateRenamingFolderId !== folderId) return;
+  renameTemplateFolder(folderId, state.templateRenamingFolderValue);
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function cancelTemplateFolderRename() {
+  if (!state.templateRenamingFolderId) return;
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function deleteTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ templateExplorer: nextExplorer, templateCurrentFolderId: fallbackFolderId, templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function setTemplateFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue.split(',').map((item) => item.trim()).filter(Boolean);
+  updateTemplateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ templateCurrentFolderId: folderId });
+}
+
+function renderFolderTree(folderId, depth = 0) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.designTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.renamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" />`
+        : `<button class="tree-folder ${state.currentFolderId === folder.id ? 'active' : ''}" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function renderTemplateFolderTree(folderId, depth = 0) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getTemplateChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.templateTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.templateRenamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-template-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" />`
+        : `<button class="tree-folder ${state.templateCurrentFolderId === folder.id ? 'active' : ''}" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderTemplateFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function templateLibraryView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getTemplateCurrentFolder();
+  const children = getTemplateChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.templateSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getTemplateFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderTemplateFolderTree(state.templateExplorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-template-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="templateSearchInput" value="${state.templateSearchQuery}" placeholder="Search templates" />
+            <button id="templateCreateFolderBtn" class="action-btn">Create Folder</button>
+            <button id="templateDeleteFolderBtn" class="action-btn" ${currentFolder.id === state.templateExplorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="templateAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.templateRenamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" /><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<div class="explorer-row"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></div>`).join('')}
+          ${!folders.length && !files.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="templateOwnersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="templateEditorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="templateViewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function fileExplorerView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getCurrentFolder();
+  const children = getChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.assetSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderFolderTree(state.explorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="assetSearchInput" value="${state.assetSearchQuery}" placeholder="Search assets" />
+            <button id="createFolderBtn" class="action-btn">Create Folder</button>
+            <button id="deleteFolderBtn" class="action-btn" ${currentFolder.id === state.explorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="brandAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.renamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" /><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<button class="explorer-row file-row" data-asset-id="${file.id}"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${state.templates.length ? `<div class="template-strip"><h4>Saved Templates</h4>${state.templates.filter((template) => !fileSearch || template.name.toLowerCase().includes(fileSearch)).map((template) => `<button class="explorer-row template-row" data-template-id="${template.id}"><span>🧩 ${template.name}</span><span>Template</span><span>${template.templateSize || template.dimension}</span><span>${new Date(template.createdAt).toLocaleDateString()}</span></button>`).join('')}</div>` : ''}
+          ${!folders.length && !files.length && !state.templates.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="ownersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="editorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="viewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+
+function getTemplateNodeById(id) {
+  return state.templateExplorer.nodes.find((node) => node.id === id);
+}
+
+function getTemplateCurrentFolder() {
+  return getTemplateNodeById(state.templateCurrentFolderId) || getTemplateNodeById(state.templateExplorer.rootId);
+}
+
+function getTemplateChildren(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getTemplateNodeById(id)).filter(Boolean);
+}
+
+function getTemplateFolderPath(folderId) {
+  const path = [];
+  let current = getTemplateNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getTemplateNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ currentFolderId: folderId });
+}
+
+
+function updateTemplateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ templateExplorer: nextExplorer });
+}
+
+function createTemplateSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getTemplateCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getTemplateChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    templateExplorer: nextExplorer,
+    templateCurrentFolderId: newFolder.id,
+  });
+}
+
+function renameTemplateFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const siblings = getTemplateChildren(folder.parentId || state.templateExplorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateTemplateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startTemplateFolderRename(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+  setState({ templateRenamingFolderId: folderId, templateRenamingFolderValue: folder.name });
+}
+
+function commitTemplateFolderRename(folderId) {
+  if (!folderId || state.templateRenamingFolderId !== folderId) return;
+  renameTemplateFolder(folderId, state.templateRenamingFolderValue);
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function cancelTemplateFolderRename() {
+  if (!state.templateRenamingFolderId) return;
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function deleteTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ templateExplorer: nextExplorer, templateCurrentFolderId: fallbackFolderId, templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function setTemplateFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue.split(',').map((item) => item.trim()).filter(Boolean);
+  updateTemplateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ templateCurrentFolderId: folderId });
+}
+
+function renderFolderTree(folderId, depth = 0) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.designTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.renamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" />`
+        : `<button class="tree-folder ${state.currentFolderId === folder.id ? 'active' : ''}" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function renderTemplateFolderTree(folderId, depth = 0) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getTemplateChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.templateTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.templateRenamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-template-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" />`
+        : `<button class="tree-folder ${state.templateCurrentFolderId === folder.id ? 'active' : ''}" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderTemplateFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function templateLibraryView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getTemplateCurrentFolder();
+  const children = getTemplateChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.templateSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getTemplateFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderTemplateFolderTree(state.templateExplorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-template-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="templateSearchInput" value="${state.templateSearchQuery}" placeholder="Search templates" />
+            <button id="templateCreateFolderBtn" class="action-btn">Create Folder</button>
+            <button id="templateDeleteFolderBtn" class="action-btn" ${currentFolder.id === state.templateExplorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="templateAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.templateRenamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" /><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<div class="explorer-row"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></div>`).join('')}
+          ${!folders.length && !files.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="templateOwnersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="templateEditorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="templateViewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function fileExplorerView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getCurrentFolder();
+  const children = getChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.assetSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderFolderTree(state.explorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="assetSearchInput" value="${state.assetSearchQuery}" placeholder="Search assets" />
+            <button id="createFolderBtn" class="action-btn">Create Folder</button>
+            <button id="deleteFolderBtn" class="action-btn" ${currentFolder.id === state.explorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="brandAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.renamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" /><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<button class="explorer-row file-row" data-asset-id="${file.id}"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${state.templates.length ? `<div class="template-strip"><h4>Saved Templates</h4>${state.templates.filter((template) => !fileSearch || template.name.toLowerCase().includes(fileSearch)).map((template) => `<button class="explorer-row template-row" data-template-id="${template.id}"><span>🧩 ${template.name}</span><span>Template</span><span>${template.templateSize || template.dimension}</span><span>${new Date(template.createdAt).toLocaleDateString()}</span></button>`).join('')}</div>` : ''}
+          ${!folders.length && !files.length && !state.templates.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="ownersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="editorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="viewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+
+function getTemplateNodeById(id) {
+  return state.templateExplorer.nodes.find((node) => node.id === id);
+}
+
+function getTemplateCurrentFolder() {
+  return getTemplateNodeById(state.templateCurrentFolderId) || getTemplateNodeById(state.templateExplorer.rootId);
+}
+
+function getTemplateChildren(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getTemplateNodeById(id)).filter(Boolean);
+}
+
+function getTemplateFolderPath(folderId) {
+  const path = [];
+  let current = getTemplateNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getTemplateNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ currentFolderId: folderId });
+}
+
+
+function updateTemplateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ templateExplorer: nextExplorer });
+}
+
+function createTemplateSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getTemplateCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getTemplateChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    templateExplorer: nextExplorer,
+    templateCurrentFolderId: newFolder.id,
+  });
+}
+
+function renameTemplateFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const siblings = getTemplateChildren(folder.parentId || state.templateExplorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateTemplateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startTemplateFolderRename(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+  setState({ templateRenamingFolderId: folderId, templateRenamingFolderValue: folder.name });
+}
+
+function commitTemplateFolderRename(folderId) {
+  if (!folderId || state.templateRenamingFolderId !== folderId) return;
+  renameTemplateFolder(folderId, state.templateRenamingFolderValue);
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function cancelTemplateFolderRename() {
+  if (!state.templateRenamingFolderId) return;
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function deleteTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ templateExplorer: nextExplorer, templateCurrentFolderId: fallbackFolderId, templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function setTemplateFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue.split(',').map((item) => item.trim()).filter(Boolean);
+  updateTemplateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ templateCurrentFolderId: folderId });
+}
+
+function renderFolderTree(folderId, depth = 0) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.designTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.renamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" />`
+        : `<button class="tree-folder ${state.currentFolderId === folder.id ? 'active' : ''}" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function renderTemplateFolderTree(folderId, depth = 0) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getTemplateChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.templateTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.templateRenamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-template-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" />`
+        : `<button class="tree-folder ${state.templateCurrentFolderId === folder.id ? 'active' : ''}" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderTemplateFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function templateLibraryView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getTemplateCurrentFolder();
+  const children = getTemplateChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.templateSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getTemplateFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderTemplateFolderTree(state.templateExplorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-template-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="templateSearchInput" value="${state.templateSearchQuery}" placeholder="Search templates" />
+            <button id="templateCreateFolderBtn" class="action-btn">Create Folder</button>
+            <button id="templateDeleteFolderBtn" class="action-btn" ${currentFolder.id === state.templateExplorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="templateAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.templateRenamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" /><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<div class="explorer-row"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></div>`).join('')}
+          ${!folders.length && !files.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="templateOwnersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="templateEditorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="templateViewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function fileExplorerView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getCurrentFolder();
+  const children = getChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.assetSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderFolderTree(state.explorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="assetSearchInput" value="${state.assetSearchQuery}" placeholder="Search assets" />
+            <button id="createFolderBtn" class="action-btn">Create Folder</button>
+            <button id="deleteFolderBtn" class="action-btn" ${currentFolder.id === state.explorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="brandAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.renamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" /><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<button class="explorer-row file-row" data-asset-id="${file.id}"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${state.templates.length ? `<div class="template-strip"><h4>Saved Templates</h4>${state.templates.filter((template) => !fileSearch || template.name.toLowerCase().includes(fileSearch)).map((template) => `<button class="explorer-row template-row" data-template-id="${template.id}"><span>🧩 ${template.name}</span><span>Template</span><span>${template.templateSize || template.dimension}</span><span>${new Date(template.createdAt).toLocaleDateString()}</span></button>`).join('')}</div>` : ''}
+          ${!folders.length && !files.length && !state.templates.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="ownersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="editorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="viewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+
+function getTemplateNodeById(id) {
+  return state.templateExplorer.nodes.find((node) => node.id === id);
+}
+
+function getTemplateCurrentFolder() {
+  return getTemplateNodeById(state.templateCurrentFolderId) || getTemplateNodeById(state.templateExplorer.rootId);
+}
+
+function getTemplateChildren(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getTemplateNodeById(id)).filter(Boolean);
+}
+
+function getTemplateFolderPath(folderId) {
+  const path = [];
+  let current = getTemplateNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getTemplateNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ currentFolderId: folderId });
+}
+
+
+function updateTemplateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ templateExplorer: nextExplorer });
+}
+
+function createTemplateSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getTemplateCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getTemplateChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    templateExplorer: nextExplorer,
+    templateCurrentFolderId: newFolder.id,
+  });
+}
+
+function renameTemplateFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const siblings = getTemplateChildren(folder.parentId || state.templateExplorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateTemplateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startTemplateFolderRename(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+  setState({ templateRenamingFolderId: folderId, templateRenamingFolderValue: folder.name });
+}
+
+function commitTemplateFolderRename(folderId) {
+  if (!folderId || state.templateRenamingFolderId !== folderId) return;
+  renameTemplateFolder(folderId, state.templateRenamingFolderValue);
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function cancelTemplateFolderRename() {
+  if (!state.templateRenamingFolderId) return;
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function deleteTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ templateExplorer: nextExplorer, templateCurrentFolderId: fallbackFolderId, templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function setTemplateFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue.split(',').map((item) => item.trim()).filter(Boolean);
+  updateTemplateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ templateCurrentFolderId: folderId });
+}
+
+function renderFolderTree(folderId, depth = 0) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.designTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.renamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" />`
+        : `<button class="tree-folder ${state.currentFolderId === folder.id ? 'active' : ''}" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function renderTemplateFolderTree(folderId, depth = 0) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getTemplateChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.templateTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.templateRenamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-template-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" />`
+        : `<button class="tree-folder ${state.templateCurrentFolderId === folder.id ? 'active' : ''}" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderTemplateFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function templateLibraryView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getTemplateCurrentFolder();
+  const children = getTemplateChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.templateSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getTemplateFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderTemplateFolderTree(state.templateExplorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-template-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="templateSearchInput" value="${state.templateSearchQuery}" placeholder="Search templates" />
+            <button id="templateCreateFolderBtn" class="action-btn">Create Folder</button>
+            <button id="templateDeleteFolderBtn" class="action-btn" ${currentFolder.id === state.templateExplorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="templateAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.templateRenamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" /><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<div class="explorer-row"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></div>`).join('')}
+          ${!folders.length && !files.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="templateOwnersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="templateEditorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="templateViewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function fileExplorerView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getCurrentFolder();
+  const children = getChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.assetSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderFolderTree(state.explorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="assetSearchInput" value="${state.assetSearchQuery}" placeholder="Search assets" />
+            <button id="createFolderBtn" class="action-btn">Create Folder</button>
+            <button id="deleteFolderBtn" class="action-btn" ${currentFolder.id === state.explorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="brandAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.renamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" /><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<button class="explorer-row file-row" data-asset-id="${file.id}"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${state.templates.length ? `<div class="template-strip"><h4>Saved Templates</h4>${state.templates.filter((template) => !fileSearch || template.name.toLowerCase().includes(fileSearch)).map((template) => `<button class="explorer-row template-row" data-template-id="${template.id}"><span>🧩 ${template.name}</span><span>Template</span><span>${template.templateSize || template.dimension}</span><span>${new Date(template.createdAt).toLocaleDateString()}</span></button>`).join('')}</div>` : ''}
+          ${!folders.length && !files.length && !state.templates.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="ownersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="editorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="viewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+
+function getTemplateNodeById(id) {
+  return state.templateExplorer.nodes.find((node) => node.id === id);
+}
+
+function getTemplateCurrentFolder() {
+  return getTemplateNodeById(state.templateCurrentFolderId) || getTemplateNodeById(state.templateExplorer.rootId);
+}
+
+function getTemplateChildren(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getTemplateNodeById(id)).filter(Boolean);
+}
+
+function getTemplateFolderPath(folderId) {
+  const path = [];
+  let current = getTemplateNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getTemplateNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ currentFolderId: folderId });
+}
+
+
+function updateTemplateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ templateExplorer: nextExplorer });
+}
+
+function createTemplateSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getTemplateCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getTemplateChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    templateExplorer: nextExplorer,
+    templateCurrentFolderId: newFolder.id,
+  });
+}
+
+function renameTemplateFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const siblings = getTemplateChildren(folder.parentId || state.templateExplorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateTemplateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startTemplateFolderRename(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+  setState({ templateRenamingFolderId: folderId, templateRenamingFolderValue: folder.name });
+}
+
+function commitTemplateFolderRename(folderId) {
+  if (!folderId || state.templateRenamingFolderId !== folderId) return;
+  renameTemplateFolder(folderId, state.templateRenamingFolderValue);
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function cancelTemplateFolderRename() {
+  if (!state.templateRenamingFolderId) return;
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function deleteTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ templateExplorer: nextExplorer, templateCurrentFolderId: fallbackFolderId, templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function setTemplateFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue.split(',').map((item) => item.trim()).filter(Boolean);
+  updateTemplateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ templateCurrentFolderId: folderId });
+}
+
+function renderFolderTree(folderId, depth = 0) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.designTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.renamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" />`
+        : `<button class="tree-folder ${state.currentFolderId === folder.id ? 'active' : ''}" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function renderTemplateFolderTree(folderId, depth = 0) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getTemplateChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.templateTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.templateRenamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-template-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" />`
+        : `<button class="tree-folder ${state.templateCurrentFolderId === folder.id ? 'active' : ''}" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderTemplateFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function templateLibraryView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getTemplateCurrentFolder();
+  const children = getTemplateChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.templateSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getTemplateFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderTemplateFolderTree(state.templateExplorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-template-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="templateSearchInput" value="${state.templateSearchQuery}" placeholder="Search templates" />
+            <button id="templateCreateFolderBtn" class="action-btn">Create Folder</button>
+            <button id="templateDeleteFolderBtn" class="action-btn" ${currentFolder.id === state.templateExplorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="templateAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.templateRenamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" /><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<div class="explorer-row"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></div>`).join('')}
+          ${!folders.length && !files.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="templateOwnersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="templateEditorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="templateViewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function fileExplorerView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getCurrentFolder();
+  const children = getChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.assetSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderFolderTree(state.explorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="assetSearchInput" value="${state.assetSearchQuery}" placeholder="Search assets" />
+            <button id="createFolderBtn" class="action-btn">Create Folder</button>
+            <button id="deleteFolderBtn" class="action-btn" ${currentFolder.id === state.explorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="brandAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.renamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" /><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<button class="explorer-row file-row" data-asset-id="${file.id}"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${state.templates.length ? `<div class="template-strip"><h4>Saved Templates</h4>${state.templates.filter((template) => !fileSearch || template.name.toLowerCase().includes(fileSearch)).map((template) => `<button class="explorer-row template-row" data-template-id="${template.id}"><span>🧩 ${template.name}</span><span>Template</span><span>${template.templateSize || template.dimension}</span><span>${new Date(template.createdAt).toLocaleDateString()}</span></button>`).join('')}</div>` : ''}
+          ${!folders.length && !files.length && !state.templates.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="ownersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="editorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="viewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+
+function getTemplateNodeById(id) {
+  return state.templateExplorer.nodes.find((node) => node.id === id);
+}
+
+function getTemplateCurrentFolder() {
+  return getTemplateNodeById(state.templateCurrentFolderId) || getTemplateNodeById(state.templateExplorer.rootId);
+}
+
+function getTemplateChildren(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getTemplateNodeById(id)).filter(Boolean);
+}
+
+function getTemplateFolderPath(folderId) {
+  const path = [];
+  let current = getTemplateNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getTemplateNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ currentFolderId: folderId });
+}
+
+
+function updateTemplateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ templateExplorer: nextExplorer });
+}
+
+function createTemplateSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getTemplateCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getTemplateChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    templateExplorer: nextExplorer,
+    templateCurrentFolderId: newFolder.id,
+  });
+}
+
+function renameTemplateFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const siblings = getTemplateChildren(folder.parentId || state.templateExplorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateTemplateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startTemplateFolderRename(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+  setState({ templateRenamingFolderId: folderId, templateRenamingFolderValue: folder.name });
+}
+
+function commitTemplateFolderRename(folderId) {
+  if (!folderId || state.templateRenamingFolderId !== folderId) return;
+  renameTemplateFolder(folderId, state.templateRenamingFolderValue);
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function cancelTemplateFolderRename() {
+  if (!state.templateRenamingFolderId) return;
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function deleteTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ templateExplorer: nextExplorer, templateCurrentFolderId: fallbackFolderId, templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function setTemplateFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue.split(',').map((item) => item.trim()).filter(Boolean);
+  updateTemplateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ templateCurrentFolderId: folderId });
+}
+
+function renderFolderTree(folderId, depth = 0) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.designTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.renamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" />`
+        : `<button class="tree-folder ${state.currentFolderId === folder.id ? 'active' : ''}" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function renderTemplateFolderTree(folderId, depth = 0) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getTemplateChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.templateTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.templateRenamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-template-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" />`
+        : `<button class="tree-folder ${state.templateCurrentFolderId === folder.id ? 'active' : ''}" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderTemplateFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function templateLibraryView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getTemplateCurrentFolder();
+  const children = getTemplateChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.templateSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getTemplateFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderTemplateFolderTree(state.templateExplorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-template-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="templateSearchInput" value="${state.templateSearchQuery}" placeholder="Search templates" />
+            <button id="templateCreateFolderBtn" class="action-btn">Create Folder</button>
+            <button id="templateDeleteFolderBtn" class="action-btn" ${currentFolder.id === state.templateExplorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="templateAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.templateRenamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" /><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<div class="explorer-row"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></div>`).join('')}
+          ${!folders.length && !files.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="templateOwnersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="templateEditorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="templateViewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function fileExplorerView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getCurrentFolder();
+  const children = getChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.assetSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderFolderTree(state.explorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="assetSearchInput" value="${state.assetSearchQuery}" placeholder="Search assets" />
+            <button id="createFolderBtn" class="action-btn">Create Folder</button>
+            <button id="deleteFolderBtn" class="action-btn" ${currentFolder.id === state.explorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="brandAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.renamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" /><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<button class="explorer-row file-row" data-asset-id="${file.id}"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${state.templates.length ? `<div class="template-strip"><h4>Saved Templates</h4>${state.templates.filter((template) => !fileSearch || template.name.toLowerCase().includes(fileSearch)).map((template) => `<button class="explorer-row template-row" data-template-id="${template.id}"><span>🧩 ${template.name}</span><span>Template</span><span>${template.templateSize || template.dimension}</span><span>${new Date(template.createdAt).toLocaleDateString()}</span></button>`).join('')}</div>` : ''}
+          ${!folders.length && !files.length && !state.templates.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="ownersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="editorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="viewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+
+function getTemplateNodeById(id) {
+  return state.templateExplorer.nodes.find((node) => node.id === id);
+}
+
+function getTemplateCurrentFolder() {
+  return getTemplateNodeById(state.templateCurrentFolderId) || getTemplateNodeById(state.templateExplorer.rootId);
+}
+
+function getTemplateChildren(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getTemplateNodeById(id)).filter(Boolean);
+}
+
+function getTemplateFolderPath(folderId) {
+  const path = [];
+  let current = getTemplateNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getTemplateNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ currentFolderId: folderId });
+}
+
+
+function updateTemplateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ templateExplorer: nextExplorer });
+}
+
+function createTemplateSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getTemplateCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getTemplateChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    templateExplorer: nextExplorer,
+    templateCurrentFolderId: newFolder.id,
+  });
+}
+
+function renameTemplateFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const siblings = getTemplateChildren(folder.parentId || state.templateExplorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateTemplateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startTemplateFolderRename(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+  setState({ templateRenamingFolderId: folderId, templateRenamingFolderValue: folder.name });
+}
+
+function commitTemplateFolderRename(folderId) {
+  if (!folderId || state.templateRenamingFolderId !== folderId) return;
+  renameTemplateFolder(folderId, state.templateRenamingFolderValue);
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function cancelTemplateFolderRename() {
+  if (!state.templateRenamingFolderId) return;
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function deleteTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ templateExplorer: nextExplorer, templateCurrentFolderId: fallbackFolderId, templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function setTemplateFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue.split(',').map((item) => item.trim()).filter(Boolean);
+  updateTemplateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ templateCurrentFolderId: folderId });
+}
+
+function renderFolderTree(folderId, depth = 0) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.designTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.renamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" />`
+        : `<button class="tree-folder ${state.currentFolderId === folder.id ? 'active' : ''}" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function renderTemplateFolderTree(folderId, depth = 0) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getTemplateChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.templateTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.templateRenamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-template-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" />`
+        : `<button class="tree-folder ${state.templateCurrentFolderId === folder.id ? 'active' : ''}" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderTemplateFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function templateLibraryView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getTemplateCurrentFolder();
+  const children = getTemplateChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.templateSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getTemplateFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderTemplateFolderTree(state.templateExplorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-template-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="templateSearchInput" value="${state.templateSearchQuery}" placeholder="Search templates" />
+            <button id="templateCreateFolderBtn" class="action-btn">Create Folder</button>
+            <button id="templateDeleteFolderBtn" class="action-btn" ${currentFolder.id === state.templateExplorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="templateAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.templateRenamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" /><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<div class="explorer-row"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></div>`).join('')}
+          ${!folders.length && !files.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="templateOwnersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="templateEditorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="templateViewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function fileExplorerView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getCurrentFolder();
+  const children = getChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.assetSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderFolderTree(state.explorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="assetSearchInput" value="${state.assetSearchQuery}" placeholder="Search assets" />
+            <button id="createFolderBtn" class="action-btn">Create Folder</button>
+            <button id="deleteFolderBtn" class="action-btn" ${currentFolder.id === state.explorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="brandAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.renamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" /><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<button class="explorer-row file-row" data-asset-id="${file.id}"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${state.templates.length ? `<div class="template-strip"><h4>Saved Templates</h4>${state.templates.filter((template) => !fileSearch || template.name.toLowerCase().includes(fileSearch)).map((template) => `<button class="explorer-row template-row" data-template-id="${template.id}"><span>🧩 ${template.name}</span><span>Template</span><span>${template.templateSize || template.dimension}</span><span>${new Date(template.createdAt).toLocaleDateString()}</span></button>`).join('')}</div>` : ''}
+          ${!folders.length && !files.length && !state.templates.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="ownersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="editorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="viewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+
+function getTemplateNodeById(id) {
+  return state.templateExplorer.nodes.find((node) => node.id === id);
+}
+
+function getTemplateCurrentFolder() {
+  return getTemplateNodeById(state.templateCurrentFolderId) || getTemplateNodeById(state.templateExplorer.rootId);
+}
+
+function getTemplateChildren(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getTemplateNodeById(id)).filter(Boolean);
+}
+
+function getTemplateFolderPath(folderId) {
+  const path = [];
+  let current = getTemplateNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getTemplateNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ currentFolderId: folderId });
+}
+
+
+function updateTemplateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ templateExplorer: nextExplorer });
+}
+
+function createTemplateSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getTemplateCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getTemplateChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    templateExplorer: nextExplorer,
+    templateCurrentFolderId: newFolder.id,
+  });
+}
+
+function renameTemplateFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const siblings = getTemplateChildren(folder.parentId || state.templateExplorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateTemplateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startTemplateFolderRename(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+  setState({ templateRenamingFolderId: folderId, templateRenamingFolderValue: folder.name });
+}
+
+function commitTemplateFolderRename(folderId) {
+  if (!folderId || state.templateRenamingFolderId !== folderId) return;
+  renameTemplateFolder(folderId, state.templateRenamingFolderValue);
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function cancelTemplateFolderRename() {
+  if (!state.templateRenamingFolderId) return;
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function deleteTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ templateExplorer: nextExplorer, templateCurrentFolderId: fallbackFolderId, templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function setTemplateFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue.split(',').map((item) => item.trim()).filter(Boolean);
+  updateTemplateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ templateCurrentFolderId: folderId });
+}
+
+function renderFolderTree(folderId, depth = 0) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.designTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.renamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" />`
+        : `<button class="tree-folder ${state.currentFolderId === folder.id ? 'active' : ''}" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function renderTemplateFolderTree(folderId, depth = 0) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getTemplateChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.templateTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.templateRenamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-template-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" />`
+        : `<button class="tree-folder ${state.templateCurrentFolderId === folder.id ? 'active' : ''}" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderTemplateFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function templateLibraryView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getTemplateCurrentFolder();
+  const children = getTemplateChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.templateSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getTemplateFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderTemplateFolderTree(state.templateExplorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-template-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="templateSearchInput" value="${state.templateSearchQuery}" placeholder="Search templates" />
+            <button id="templateCreateFolderBtn" class="action-btn">Create Folder</button>
+            <button id="templateDeleteFolderBtn" class="action-btn" ${currentFolder.id === state.templateExplorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="templateAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.templateRenamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" /><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<div class="explorer-row"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></div>`).join('')}
+          ${!folders.length && !files.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="templateOwnersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="templateEditorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="templateViewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function fileExplorerView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getCurrentFolder();
+  const children = getChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.assetSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderFolderTree(state.explorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="assetSearchInput" value="${state.assetSearchQuery}" placeholder="Search assets" />
+            <button id="createFolderBtn" class="action-btn">Create Folder</button>
+            <button id="deleteFolderBtn" class="action-btn" ${currentFolder.id === state.explorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="brandAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.renamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" /><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<button class="explorer-row file-row" data-asset-id="${file.id}"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${state.templates.length ? `<div class="template-strip"><h4>Saved Templates</h4>${state.templates.filter((template) => !fileSearch || template.name.toLowerCase().includes(fileSearch)).map((template) => `<button class="explorer-row template-row" data-template-id="${template.id}"><span>🧩 ${template.name}</span><span>Template</span><span>${template.templateSize || template.dimension}</span><span>${new Date(template.createdAt).toLocaleDateString()}</span></button>`).join('')}</div>` : ''}
+          ${!folders.length && !files.length && !state.templates.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="ownersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="editorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="viewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+
+function getTemplateNodeById(id) {
+  return state.templateExplorer.nodes.find((node) => node.id === id);
+}
+
+function getTemplateCurrentFolder() {
+  return getTemplateNodeById(state.templateCurrentFolderId) || getTemplateNodeById(state.templateExplorer.rootId);
+}
+
+function getTemplateChildren(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getTemplateNodeById(id)).filter(Boolean);
+}
+
+function getTemplateFolderPath(folderId) {
+  const path = [];
+  let current = getTemplateNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getTemplateNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ currentFolderId: folderId });
+}
+
+
+function updateTemplateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ templateExplorer: nextExplorer });
+}
+
+function createTemplateSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getTemplateCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getTemplateChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    templateExplorer: nextExplorer,
+    templateCurrentFolderId: newFolder.id,
+  });
+}
+
+function renameTemplateFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const siblings = getTemplateChildren(folder.parentId || state.templateExplorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateTemplateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startTemplateFolderRename(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+  setState({ templateRenamingFolderId: folderId, templateRenamingFolderValue: folder.name });
+}
+
+function commitTemplateFolderRename(folderId) {
+  if (!folderId || state.templateRenamingFolderId !== folderId) return;
+  renameTemplateFolder(folderId, state.templateRenamingFolderValue);
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function cancelTemplateFolderRename() {
+  if (!state.templateRenamingFolderId) return;
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function deleteTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ templateExplorer: nextExplorer, templateCurrentFolderId: fallbackFolderId, templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function setTemplateFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue.split(',').map((item) => item.trim()).filter(Boolean);
+  updateTemplateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ templateCurrentFolderId: folderId });
+}
+
+function renderFolderTree(folderId, depth = 0) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.designTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.renamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" />`
+        : `<button class="tree-folder ${state.currentFolderId === folder.id ? 'active' : ''}" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function renderTemplateFolderTree(folderId, depth = 0) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getTemplateChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.templateTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.templateRenamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-template-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" />`
+        : `<button class="tree-folder ${state.templateCurrentFolderId === folder.id ? 'active' : ''}" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderTemplateFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function templateLibraryView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getTemplateCurrentFolder();
+  const children = getTemplateChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.templateSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getTemplateFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderTemplateFolderTree(state.templateExplorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-template-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="templateSearchInput" value="${state.templateSearchQuery}" placeholder="Search templates" />
+            <button id="templateCreateFolderBtn" class="action-btn">Create Folder</button>
+            <button id="templateDeleteFolderBtn" class="action-btn" ${currentFolder.id === state.templateExplorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="templateAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.templateRenamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" /><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<div class="explorer-row"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></div>`).join('')}
+          ${!folders.length && !files.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="templateOwnersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="templateEditorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="templateViewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function fileExplorerView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getCurrentFolder();
+  const children = getChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.assetSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderFolderTree(state.explorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="assetSearchInput" value="${state.assetSearchQuery}" placeholder="Search assets" />
+            <button id="createFolderBtn" class="action-btn">Create Folder</button>
+            <button id="deleteFolderBtn" class="action-btn" ${currentFolder.id === state.explorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="brandAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.renamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" /><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<button class="explorer-row file-row" data-asset-id="${file.id}"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${state.templates.length ? `<div class="template-strip"><h4>Saved Templates</h4>${state.templates.filter((template) => !fileSearch || template.name.toLowerCase().includes(fileSearch)).map((template) => `<button class="explorer-row template-row" data-template-id="${template.id}"><span>🧩 ${template.name}</span><span>Template</span><span>${template.templateSize || template.dimension}</span><span>${new Date(template.createdAt).toLocaleDateString()}</span></button>`).join('')}</div>` : ''}
+          ${!folders.length && !files.length && !state.templates.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="ownersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="editorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="viewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+
+function getTemplateNodeById(id) {
+  return state.templateExplorer.nodes.find((node) => node.id === id);
+}
+
+function getTemplateCurrentFolder() {
+  return getTemplateNodeById(state.templateCurrentFolderId) || getTemplateNodeById(state.templateExplorer.rootId);
+}
+
+function getTemplateChildren(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getTemplateNodeById(id)).filter(Boolean);
+}
+
+function getTemplateFolderPath(folderId) {
+  const path = [];
+  let current = getTemplateNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getTemplateNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ currentFolderId: folderId });
+}
+
+
+function updateTemplateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ templateExplorer: nextExplorer });
+}
+
+function createTemplateSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getTemplateCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getTemplateChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    templateExplorer: nextExplorer,
+    templateCurrentFolderId: newFolder.id,
+  });
+}
+
+function renameTemplateFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const siblings = getTemplateChildren(folder.parentId || state.templateExplorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateTemplateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startTemplateFolderRename(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+  setState({ templateRenamingFolderId: folderId, templateRenamingFolderValue: folder.name });
+}
+
+function commitTemplateFolderRename(folderId) {
+  if (!folderId || state.templateRenamingFolderId !== folderId) return;
+  renameTemplateFolder(folderId, state.templateRenamingFolderValue);
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function cancelTemplateFolderRename() {
+  if (!state.templateRenamingFolderId) return;
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function deleteTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ templateExplorer: nextExplorer, templateCurrentFolderId: fallbackFolderId, templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function setTemplateFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue.split(',').map((item) => item.trim()).filter(Boolean);
+  updateTemplateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ templateCurrentFolderId: folderId });
+}
+
+function renderFolderTree(folderId, depth = 0) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.designTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.renamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" />`
+        : `<button class="tree-folder ${state.currentFolderId === folder.id ? 'active' : ''}" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function renderTemplateFolderTree(folderId, depth = 0) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getTemplateChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.templateTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.templateRenamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-template-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" />`
+        : `<button class="tree-folder ${state.templateCurrentFolderId === folder.id ? 'active' : ''}" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderTemplateFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function templateLibraryView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getTemplateCurrentFolder();
+  const children = getTemplateChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.templateSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getTemplateFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderTemplateFolderTree(state.templateExplorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-template-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="templateSearchInput" value="${state.templateSearchQuery}" placeholder="Search templates" />
+            <button id="templateCreateFolderBtn" class="action-btn">Create Folder</button>
+            <button id="templateDeleteFolderBtn" class="action-btn" ${currentFolder.id === state.templateExplorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="templateAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.templateRenamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" /><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<div class="explorer-row"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></div>`).join('')}
+          ${!folders.length && !files.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="templateOwnersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="templateEditorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="templateViewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function fileExplorerView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getCurrentFolder();
+  const children = getChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.assetSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderFolderTree(state.explorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="assetSearchInput" value="${state.assetSearchQuery}" placeholder="Search assets" />
+            <button id="createFolderBtn" class="action-btn">Create Folder</button>
+            <button id="deleteFolderBtn" class="action-btn" ${currentFolder.id === state.explorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="brandAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.renamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" /><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<button class="explorer-row file-row" data-asset-id="${file.id}"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${state.templates.length ? `<div class="template-strip"><h4>Saved Templates</h4>${state.templates.filter((template) => !fileSearch || template.name.toLowerCase().includes(fileSearch)).map((template) => `<button class="explorer-row template-row" data-template-id="${template.id}"><span>🧩 ${template.name}</span><span>Template</span><span>${template.templateSize || template.dimension}</span><span>${new Date(template.createdAt).toLocaleDateString()}</span></button>`).join('')}</div>` : ''}
+          ${!folders.length && !files.length && !state.templates.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="ownersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="editorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="viewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+
+function getTemplateNodeById(id) {
+  return state.templateExplorer.nodes.find((node) => node.id === id);
+}
+
+function getTemplateCurrentFolder() {
+  return getTemplateNodeById(state.templateCurrentFolderId) || getTemplateNodeById(state.templateExplorer.rootId);
+}
+
+function getTemplateChildren(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getTemplateNodeById(id)).filter(Boolean);
+}
+
+function getTemplateFolderPath(folderId) {
+  const path = [];
+  let current = getTemplateNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getTemplateNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ currentFolderId: folderId });
+}
+
+
+function updateTemplateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ templateExplorer: nextExplorer });
+}
+
+function createTemplateSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getTemplateCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getTemplateChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    templateExplorer: nextExplorer,
+    templateCurrentFolderId: newFolder.id,
+  });
+}
+
+function renameTemplateFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const siblings = getTemplateChildren(folder.parentId || state.templateExplorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateTemplateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startTemplateFolderRename(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+  setState({ templateRenamingFolderId: folderId, templateRenamingFolderValue: folder.name });
+}
+
+function commitTemplateFolderRename(folderId) {
+  if (!folderId || state.templateRenamingFolderId !== folderId) return;
+  renameTemplateFolder(folderId, state.templateRenamingFolderValue);
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function cancelTemplateFolderRename() {
+  if (!state.templateRenamingFolderId) return;
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function deleteTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ templateExplorer: nextExplorer, templateCurrentFolderId: fallbackFolderId, templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function setTemplateFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue.split(',').map((item) => item.trim()).filter(Boolean);
+  updateTemplateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ templateCurrentFolderId: folderId });
+}
+
+function renderFolderTree(folderId, depth = 0) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.designTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.renamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" />`
+        : `<button class="tree-folder ${state.currentFolderId === folder.id ? 'active' : ''}" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function renderTemplateFolderTree(folderId, depth = 0) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getTemplateChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.templateTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.templateRenamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-template-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" />`
+        : `<button class="tree-folder ${state.templateCurrentFolderId === folder.id ? 'active' : ''}" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderTemplateFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function templateLibraryView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getTemplateCurrentFolder();
+  const children = getTemplateChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.templateSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getTemplateFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderTemplateFolderTree(state.templateExplorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-template-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="templateSearchInput" value="${state.templateSearchQuery}" placeholder="Search templates" />
+            <button id="templateCreateFolderBtn" class="action-btn">Create Folder</button>
+            <button id="templateDeleteFolderBtn" class="action-btn" ${currentFolder.id === state.templateExplorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="templateAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.templateRenamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" /><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<div class="explorer-row"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></div>`).join('')}
+          ${!folders.length && !files.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="templateOwnersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="templateEditorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="templateViewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function fileExplorerView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getCurrentFolder();
+  const children = getChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.assetSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderFolderTree(state.explorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="assetSearchInput" value="${state.assetSearchQuery}" placeholder="Search assets" />
+            <button id="createFolderBtn" class="action-btn">Create Folder</button>
+            <button id="deleteFolderBtn" class="action-btn" ${currentFolder.id === state.explorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="brandAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.renamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" /><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<button class="explorer-row file-row" data-asset-id="${file.id}"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${state.templates.length ? `<div class="template-strip"><h4>Saved Templates</h4>${state.templates.filter((template) => !fileSearch || template.name.toLowerCase().includes(fileSearch)).map((template) => `<button class="explorer-row template-row" data-template-id="${template.id}"><span>🧩 ${template.name}</span><span>Template</span><span>${template.templateSize || template.dimension}</span><span>${new Date(template.createdAt).toLocaleDateString()}</span></button>`).join('')}</div>` : ''}
+          ${!folders.length && !files.length && !state.templates.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="ownersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="editorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="viewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+
+function getTemplateNodeById(id) {
+  return state.templateExplorer.nodes.find((node) => node.id === id);
+}
+
+function getTemplateCurrentFolder() {
+  return getTemplateNodeById(state.templateCurrentFolderId) || getTemplateNodeById(state.templateExplorer.rootId);
+}
+
+function getTemplateChildren(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getTemplateNodeById(id)).filter(Boolean);
+}
+
+function getTemplateFolderPath(folderId) {
+  const path = [];
+  let current = getTemplateNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getTemplateNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ currentFolderId: folderId });
+}
+
+
+function updateTemplateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ templateExplorer: nextExplorer });
+}
+
+function createTemplateSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getTemplateCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getTemplateChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    templateExplorer: nextExplorer,
+    templateCurrentFolderId: newFolder.id,
+  });
+}
+
+function renameTemplateFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const siblings = getTemplateChildren(folder.parentId || state.templateExplorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateTemplateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startTemplateFolderRename(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+  setState({ templateRenamingFolderId: folderId, templateRenamingFolderValue: folder.name });
+}
+
+function commitTemplateFolderRename(folderId) {
+  if (!folderId || state.templateRenamingFolderId !== folderId) return;
+  renameTemplateFolder(folderId, state.templateRenamingFolderValue);
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function cancelTemplateFolderRename() {
+  if (!state.templateRenamingFolderId) return;
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function deleteTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ templateExplorer: nextExplorer, templateCurrentFolderId: fallbackFolderId, templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function setTemplateFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue.split(',').map((item) => item.trim()).filter(Boolean);
+  updateTemplateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ templateCurrentFolderId: folderId });
+}
+
+function renderFolderTree(folderId, depth = 0) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.designTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.renamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" />`
+        : `<button class="tree-folder ${state.currentFolderId === folder.id ? 'active' : ''}" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function renderTemplateFolderTree(folderId, depth = 0) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getTemplateChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.templateTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.templateRenamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-template-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" />`
+        : `<button class="tree-folder ${state.templateCurrentFolderId === folder.id ? 'active' : ''}" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderTemplateFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function templateLibraryView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getTemplateCurrentFolder();
+  const children = getTemplateChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.templateSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getTemplateFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderTemplateFolderTree(state.templateExplorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-template-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="templateSearchInput" value="${state.templateSearchQuery}" placeholder="Search templates" />
+            <button id="templateCreateFolderBtn" class="action-btn">Create Folder</button>
+            <button id="templateDeleteFolderBtn" class="action-btn" ${currentFolder.id === state.templateExplorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="templateAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.templateRenamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" /><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<div class="explorer-row"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></div>`).join('')}
+          ${!folders.length && !files.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="templateOwnersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="templateEditorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="templateViewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function fileExplorerView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getCurrentFolder();
+  const children = getChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.assetSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderFolderTree(state.explorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="assetSearchInput" value="${state.assetSearchQuery}" placeholder="Search assets" />
+            <button id="createFolderBtn" class="action-btn">Create Folder</button>
+            <button id="deleteFolderBtn" class="action-btn" ${currentFolder.id === state.explorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="brandAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.renamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" /><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<button class="explorer-row file-row" data-asset-id="${file.id}"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${state.templates.length ? `<div class="template-strip"><h4>Saved Templates</h4>${state.templates.filter((template) => !fileSearch || template.name.toLowerCase().includes(fileSearch)).map((template) => `<button class="explorer-row template-row" data-template-id="${template.id}"><span>🧩 ${template.name}</span><span>Template</span><span>${template.templateSize || template.dimension}</span><span>${new Date(template.createdAt).toLocaleDateString()}</span></button>`).join('')}</div>` : ''}
+          ${!folders.length && !files.length && !state.templates.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="ownersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="editorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="viewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+
+function getTemplateNodeById(id) {
+  return state.templateExplorer.nodes.find((node) => node.id === id);
+}
+
+function getTemplateCurrentFolder() {
+  return getTemplateNodeById(state.templateCurrentFolderId) || getTemplateNodeById(state.templateExplorer.rootId);
+}
+
+function getTemplateChildren(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getTemplateNodeById(id)).filter(Boolean);
+}
+
+function getTemplateFolderPath(folderId) {
+  const path = [];
+  let current = getTemplateNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getTemplateNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ currentFolderId: folderId });
+}
+
+
+function updateTemplateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ templateExplorer: nextExplorer });
+}
+
+function createTemplateSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getTemplateCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getTemplateChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    templateExplorer: nextExplorer,
+    templateCurrentFolderId: newFolder.id,
+  });
+}
+
+function renameTemplateFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const siblings = getTemplateChildren(folder.parentId || state.templateExplorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateTemplateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startTemplateFolderRename(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+  setState({ templateRenamingFolderId: folderId, templateRenamingFolderValue: folder.name });
+}
+
+function commitTemplateFolderRename(folderId) {
+  if (!folderId || state.templateRenamingFolderId !== folderId) return;
+  renameTemplateFolder(folderId, state.templateRenamingFolderValue);
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function cancelTemplateFolderRename() {
+  if (!state.templateRenamingFolderId) return;
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function deleteTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ templateExplorer: nextExplorer, templateCurrentFolderId: fallbackFolderId, templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function setTemplateFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue.split(',').map((item) => item.trim()).filter(Boolean);
+  updateTemplateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ templateCurrentFolderId: folderId });
+}
+
+function renderFolderTree(folderId, depth = 0) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.designTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.renamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" />`
+        : `<button class="tree-folder ${state.currentFolderId === folder.id ? 'active' : ''}" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function renderTemplateFolderTree(folderId, depth = 0) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getTemplateChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.templateTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.templateRenamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-template-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" />`
+        : `<button class="tree-folder ${state.templateCurrentFolderId === folder.id ? 'active' : ''}" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderTemplateFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function templateLibraryView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getTemplateCurrentFolder();
+  const children = getTemplateChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.templateSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getTemplateFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderTemplateFolderTree(state.templateExplorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-template-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="templateSearchInput" value="${state.templateSearchQuery}" placeholder="Search templates" />
+            <button id="templateCreateFolderBtn" class="action-btn">Create Folder</button>
+            <button id="templateDeleteFolderBtn" class="action-btn" ${currentFolder.id === state.templateExplorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="templateAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.templateRenamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" /><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<div class="explorer-row"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></div>`).join('')}
+          ${!folders.length && !files.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="templateOwnersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="templateEditorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="templateViewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function fileExplorerView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getCurrentFolder();
+  const children = getChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.assetSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderFolderTree(state.explorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="assetSearchInput" value="${state.assetSearchQuery}" placeholder="Search assets" />
+            <button id="createFolderBtn" class="action-btn">Create Folder</button>
+            <button id="deleteFolderBtn" class="action-btn" ${currentFolder.id === state.explorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="brandAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.renamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" /><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<button class="explorer-row file-row" data-asset-id="${file.id}"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${state.templates.length ? `<div class="template-strip"><h4>Saved Templates</h4>${state.templates.filter((template) => !fileSearch || template.name.toLowerCase().includes(fileSearch)).map((template) => `<button class="explorer-row template-row" data-template-id="${template.id}"><span>🧩 ${template.name}</span><span>Template</span><span>${template.templateSize || template.dimension}</span><span>${new Date(template.createdAt).toLocaleDateString()}</span></button>`).join('')}</div>` : ''}
+          ${!folders.length && !files.length && !state.templates.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="ownersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="editorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="viewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function getNodeById(id) {
+  return state.explorer.nodes.find((node) => node.id === id);
+}
+
+function getCurrentFolder() {
+  return getNodeById(state.currentFolderId) || getNodeById(state.explorer.rootId);
+}
+
+function getChildren(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getNodeById(id)).filter(Boolean);
+}
+
+function getAllFiles() {
+  return state.explorer.nodes.filter((node) => node.type === 'file');
+}
+
+function getDimensionRatio(dimension = '16x9') {
+  const [w, h] = String(dimension).split('x').map(Number);
+  if (!w || !h) return 16 / 9;
+  return w / h;
+}
+
+
+function getTemplateDimensions(size = '1920x1080') {
+  const [width, height] = String(size).split('x').map(Number);
+  if (!width || !height) return { width: 1920, height: 1080 };
+  return { width, height };
+}
+
+function toStagePercent(value, max) {
+  if (!max) return 0;
+  return (Number(value) / max) * 100;
+}
+
+function getFileKind(name = '') {
+  const ext = name.split('.').pop().toLowerCase();
+  if (!ext || ext === name.toLowerCase()) return 'FILE';
+  return ext.toUpperCase();
+}
+
+function getFolderName(folderId) {
+  return getNodeById(folderId)?.name || 'Unknown Folder';
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  let current = getNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+
+function getTemplateNodeById(id) {
+  return state.templateExplorer.nodes.find((node) => node.id === id);
+}
+
+function getTemplateCurrentFolder() {
+  return getTemplateNodeById(state.templateCurrentFolderId) || getTemplateNodeById(state.templateExplorer.rootId);
+}
+
+function getTemplateChildren(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return [];
+  return folder.children.map((id) => getTemplateNodeById(id)).filter(Boolean);
+}
+
+function getTemplateFolderPath(folderId) {
+  const path = [];
+  let current = getTemplateNodeById(folderId);
+  while (current) {
+    path.unshift(current);
+    current = current.parentId ? getTemplateNodeById(current.parentId) : null;
+  }
+  return path;
+}
+
+function updateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.explorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ explorer: nextExplorer });
+}
+
+function createSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    explorer: nextExplorer,
+    currentFolderId: newFolder.id,
+  });
+}
+
+function renameFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const siblings = getChildren(folder.parentId || state.explorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startFolderRename(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+  setState({ renamingFolderId: folderId, renamingFolderValue: folder.name });
+}
+
+function commitFolderRename(folderId) {
+  if (!folderId || state.renamingFolderId !== folderId) return;
+  renameFolder(folderId, state.renamingFolderValue);
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function cancelFolderRename() {
+  if (!state.renamingFolderId) return;
+  setState({ renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function deleteFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.explorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.explorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes
+    .filter((node) => node.type === 'file' && idsToDelete.has(node.id))
+    .forEach((file) => deleteAssetData(file.srcRef || file.id));
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ explorer: nextExplorer, currentFolderId: fallbackFolderId, renamingFolderId: null, renamingFolderValue: '' });
+}
+
+function setFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  updateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToFolder(folderId) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ currentFolderId: folderId });
+}
+
+
+function updateTemplateNode(nodeId, mutator) {
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const node = nextExplorer.nodes.find((item) => item.id === nodeId);
+  if (!node) return;
+  mutator(node, nextExplorer);
+  setState({ templateExplorer: nextExplorer });
+}
+
+function createTemplateSubfolder(folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const currentFolder = getTemplateCurrentFolder();
+  if (!currentFolder || currentFolder.type !== 'folder') return;
+
+  const existing = getTemplateChildren(currentFolder.id).find((child) => child.type === 'folder' && child.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const nextCurrent = nextExplorer.nodes.find((node) => node.id === currentFolder.id);
+  const newFolder = makeFolder(trimmed, nextCurrent.id, cloneValue(nextCurrent.permissions));
+  nextCurrent.children.push(newFolder.id);
+  nextExplorer.nodes.push(newFolder);
+
+  setState({
+    templateExplorer: nextExplorer,
+    templateCurrentFolderId: newFolder.id,
+  });
+}
+
+function renameTemplateFolder(folderId, folderName) {
+  const trimmed = folderName.trim();
+  if (!trimmed) return;
+
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const siblings = getTemplateChildren(folder.parentId || state.templateExplorer.rootId)
+    .filter((item) => item.type === 'folder' && item.id !== folderId);
+  if (siblings.some((item) => item.name.toLowerCase() === trimmed.toLowerCase())) return;
+
+  updateTemplateNode(folderId, (node) => {
+    node.name = trimmed;
+  });
+}
+
+function startTemplateFolderRename(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+  setState({ templateRenamingFolderId: folderId, templateRenamingFolderValue: folder.name });
+}
+
+function commitTemplateFolderRename(folderId) {
+  if (!folderId || state.templateRenamingFolderId !== folderId) return;
+  renameTemplateFolder(folderId, state.templateRenamingFolderValue);
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function cancelTemplateFolderRename() {
+  if (!state.templateRenamingFolderId) return;
+  setState({ templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function deleteTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder' || folder.id === state.templateExplorer.rootId) return;
+
+  const nextExplorer = cloneValue(state.templateExplorer);
+  const idsToDelete = new Set();
+
+  const collect = (id) => {
+    idsToDelete.add(id);
+    const node = nextExplorer.nodes.find((item) => item.id === id);
+    if (!node || node.type !== 'folder') return;
+    node.children.forEach((childId) => collect(childId));
+  };
+  collect(folderId);
+
+  nextExplorer.nodes = nextExplorer.nodes.filter((node) => !idsToDelete.has(node.id));
+  nextExplorer.nodes.forEach((node) => {
+    if (node.type === 'folder') node.children = node.children.filter((id) => !idsToDelete.has(id));
+  });
+
+  const fallbackFolderId = folder.parentId || nextExplorer.rootId;
+  setState({ templateExplorer: nextExplorer, templateCurrentFolderId: fallbackFolderId, templateRenamingFolderId: null, templateRenamingFolderValue: '' });
+}
+
+function setTemplateFolderPermissions(folderId, key, rawValue) {
+  const values = rawValue.split(',').map((item) => item.trim()).filter(Boolean);
+  updateTemplateNode(folderId, (node) => {
+    node.permissions[key] = values;
+  });
+}
+
+function navigateToTemplateFolder(folderId) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return;
+  setState({ templateCurrentFolderId: folderId });
+}
+
+function renderFolderTree(folderId, depth = 0) {
+  const folder = getNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.designTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.renamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" />`
+        : `<button class="tree-folder ${state.currentFolderId === folder.id ? 'active' : ''}" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function renderTemplateFolderTree(folderId, depth = 0) {
+  const folder = getTemplateNodeById(folderId);
+  if (!folder || folder.type !== 'folder') return '';
+  const childFolders = getTemplateChildren(folderId).filter((child) => child.type === 'folder');
+  const hasChildren = childFolders.length > 0;
+  const expanded = state.templateTreeExpanded[folder.id] || depth === 0;
+  const isRenaming = state.templateRenamingFolderId === folder.id;
+
+  return `
+    <div class="tree-node" style="--depth:${depth}">
+      <div class="tree-row">
+        ${hasChildren ? `<button class="tree-toggle" data-template-toggle-tree-id="${folder.id}">${expanded ? '▾' : '▸'}</button>` : '<span class="tree-toggle-placeholder"></span>'}
+        ${isRenaming
+        ? `<input class="tree-folder rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" />`
+        : `<button class="tree-folder ${state.templateCurrentFolderId === folder.id ? 'active' : ''}" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename.">${folder.name}</button>`}
+      </div>
+      ${expanded ? childFolders.map((child) => renderTemplateFolderTree(child.id, depth + 1)).join('') : ''}
+    </div>
+  `;
+}
+
+function templateLibraryView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getTemplateCurrentFolder();
+  const children = getTemplateChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.templateSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getTemplateFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderTemplateFolderTree(state.templateExplorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-template-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="templateSearchInput" value="${state.templateSearchQuery}" placeholder="Search templates" />
+            <button id="templateCreateFolderBtn" class="action-btn">Create Folder</button>
+            <button id="templateDeleteFolderBtn" class="action-btn" ${currentFolder.id === state.templateExplorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="templateAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.templateRenamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-template-rename-input-id="${folder.id}" value="${state.templateRenamingFolderValue}" /><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-template-open-folder-id="${folder.id}" data-template-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getTemplateChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<div class="explorer-row"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></div>`).join('')}
+          ${!folders.length && !files.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="templateOwnersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="templateEditorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="templateViewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
+}
+
+function fileExplorerView(options = {}) {
+  const showPermissions = options.showPermissions !== false;
+  const currentFolder = getCurrentFolder();
+  const children = getChildren(currentFolder.id);
+  const folders = children.filter((item) => item.type === 'folder');
+  const fileSearch = state.assetSearchQuery.trim().toLowerCase();
+  const files = children
+    .filter((item) => item.type === 'file')
+    .filter((file) => !fileSearch || file.name.toLowerCase().includes(fileSearch));
+  const breadcrumbs = getFolderPath(currentFolder.id);
+
+  return `
+    <div class="explorer-layout ${showPermissions ? '' : 'no-permissions'}">
+      <aside class="explorer-tree panel">
+        <h4>Folders</h4>
+        ${renderFolderTree(state.explorer.rootId)}
+      </aside>
+      <section class="explorer-main panel">
+        <div class="explorer-toolbar">
+          <div class="breadcrumbs">${breadcrumbs.map((crumb, index) => `<button class="crumb" data-crumb-id="${crumb.id}">${crumb.name}${index < breadcrumbs.length - 1 ? ' /' : ''}</button>`).join('')}</div>
+          <div class="toolbar-actions">
+            <input id="assetSearchInput" value="${state.assetSearchQuery}" placeholder="Search assets" />
+            <button id="createFolderBtn" class="action-btn">Create Folder</button>
+            <button id="deleteFolderBtn" class="action-btn" ${currentFolder.id === state.explorer.rootId ? 'disabled' : ''}>Delete Folder</button>
+            <label class="action-btn upload-btn">Upload<input id="brandAssetUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple /></label>
+          </div>
+          ${state.storageNotice ? `<p class="storage-warning">${state.storageNotice}</p>` : ''}
+        </div>
+        <div class="explorer-list">
+          <div class="explorer-head"><span>Name</span><span>Type</span><span>Dimension</span><span>Modified</span></div>
+          ${folders.map((folder) => state.renamingFolderId === folder.id ? `<div class="explorer-row"><input class="rename-input" data-rename-input-id="${folder.id}" value="${state.renamingFolderValue}" /><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></div>` : `<button class="explorer-row" data-open-folder-id="${folder.id}" data-rename-folder-id="${folder.id}" title="Double-click to rename."><span>📁 ${folder.name}</span><span>Folder</span><span>${getChildren(folder.id).length} item(s)</span><span>${new Date(folder.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${files.map((file) => `<button class="explorer-row file-row" data-asset-id="${file.id}"><span>🖼️ ${file.name}</span><span>${getFileKind(file.name)}</span><span>${file.dimension}</span><span>${new Date(file.createdAt).toLocaleDateString()}</span></button>`).join('')}
+          ${state.templates.length ? `<div class="template-strip"><h4>Saved Templates</h4>${state.templates.filter((template) => !fileSearch || template.name.toLowerCase().includes(fileSearch)).map((template) => `<button class="explorer-row template-row" data-template-id="${template.id}"><span>🧩 ${template.name}</span><span>Template</span><span>${template.templateSize || template.dimension}</span><span>${new Date(template.createdAt).toLocaleDateString()}</span></button>`).join('')}</div>` : ''}
+          ${!folders.length && !files.length && !state.templates.length ? '<p class="muted">No matching assets in this folder.</p>' : ''}
+        </div>
+      </section>
+      ${showPermissions ? `<aside class="explorer-permissions panel">
+        <h4>Folder Permissions</h4>
+        <p class="muted">Access to a parent folder grants access to everything inside it.</p>
+        <label class="control-group">Owners<input id="ownersInput" value="${(currentFolder.permissions?.owners || []).join(', ')}" /></label>
+        <label class="control-group">Editors<input id="editorsInput" value="${(currentFolder.permissions?.editors || []).join(', ')}" /></label>
+        <label class="control-group">Viewers<input id="viewersInput" value="${(currentFolder.permissions?.viewers || []).join(', ')}" /></label>
+      </aside>` : ''}
+    </div>
+  `;
 }
 
 function getNodeById(id) {
@@ -852,7 +8973,10 @@ function dashboardView() {
       </div>
     </section>
     <section class="panel">
-      <h3>Global Asset Library</h3>
+      <div class="asset-header">
+        <h3>Global Asset Library</h3>
+        <button id="toggleBrandedAssets" class="utility-btn">Branded Assets</button>
+      </div>
       <div class="asset-icons">
         <button id="toggleBrandedAssets" class="asset asset-btn ${state.brandedAssetsOpen ? 'active' : ''}">${icons.branded}<span>Branded Assets</span></button>
         <button id="toggleTemplateLibrary" class="asset asset-btn ${state.templatesLibraryOpen ? 'active' : ''}">${icons.fonts}<span>Templates</span></button>
@@ -1118,6 +9242,7 @@ function controlRoomView() {
           ${renderControlTemplateStage(programTemplate, 'PROGRAM')}
         </div>
       </div>
+      ${selectedTemplate ? '<button id="loadTemplateToDesignBtn" class="pill-btn">Load Selected Template in Design</button>' : ''}
     </section>
   `;
 }
@@ -1140,12 +9265,18 @@ function outputView() {
 
 function renderView() {
   switch (state.activeTab) {
-    case 'Dashboard': return dashboardView();
-    case 'Design': return designView();
-    case 'Data Engine': return dataEngineView();
-    case 'Control Room': return controlRoomView();
-    case 'Output': return outputView();
-    default: return dashboardView();
+    case 'Dashboard':
+      return dashboardView();
+    case 'Design':
+      return designView();
+    case 'Data Engine':
+      return dataEngineView();
+    case 'Control Room':
+      return controlRoomView();
+    case 'Output':
+      return outputView();
+    default:
+      return dashboardView();
   }
 }
 
