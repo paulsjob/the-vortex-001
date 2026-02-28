@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Layer } from '../types/domain';
-import type { VortexPackage } from '../features/packages/loadVortexPackage';
+import { getManifestFormat, type VortexPackage } from '../features/packages/loadVortexPackage';
 import { revokeVortexAssetUrls } from '../features/packages/vortexAssetResolver';
 import { clearVortexFontCache } from '../features/packages/vortexFontGate';
 import { useAssetStore } from './useAssetStore';
@@ -242,12 +242,17 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
       updatedAt: template.updatedAt ?? template.createdAt,
     }));
     const vortexTemplates: TemplateListItem[] = Object.values(state.vortexPackages).map((pkg) => ({
+      ...(() => {
+        const format = getManifestFormat(pkg.manifest);
+        return {
+          formatId: format.formatId,
+          width: format.width,
+          height: format.height,
+        };
+      })(),
       id: pkg.manifest.templateId,
       name: pkg.manifest.templateName,
       source: 'vortex',
-      formatId: pkg.manifest.format.formatId,
-      width: pkg.manifest.format.width,
-      height: pkg.manifest.format.height,
       variantGroupId: typeof pkg.manifest.variantGroupId === 'string' ? pkg.manifest.variantGroupId : undefined,
       updatedAt: typeof pkg.manifest.updatedAt === 'string' ? pkg.manifest.updatedAt : undefined,
       previewUrl: state.vortexPreviewUrls[pkg.manifest.templateId],

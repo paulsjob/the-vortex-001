@@ -6,6 +6,7 @@ import { buildOutputFeedUrl } from '../features/playout/publicUrl';
 import { sceneFromVortexPackage } from '../features/packages/vortexSceneAdapter';
 import { getVortexAssetUrl } from '../features/packages/vortexAssetResolver';
 import { type FontLoadResult, loadVortexFonts } from '../features/packages/vortexFontGate';
+import { getManifestFormat } from '../features/packages/loadVortexPackage';
 import { FontGateOverlay } from '../features/playout/FontGateOverlay';
 import { applyBindingsToScene, normalizeBindingSchema, type BindingDefinition } from '../features/playout/vortexBindings';
 
@@ -36,6 +37,7 @@ export function OutputRoute() {
     try {
       const scene = sceneFromVortexPackage(pkg);
       const schema = normalizeBindingSchema(pkg.bindings);
+      const format = getManifestFormat(pkg.manifest);
       return {
         template: {
           id: pkg.manifest.templateId,
@@ -45,7 +47,7 @@ export function OutputRoute() {
           layers: scene.layers,
         },
         schema,
-        formatLabel: `${pkg.manifest.format.formatId} · ${scene.canvas.width} × ${scene.canvas.height}`,
+        formatLabel: `${format.formatId} · ${scene.canvas.width} × ${scene.canvas.height}`,
         packageRef: pkg,
       };
     } catch (error) {

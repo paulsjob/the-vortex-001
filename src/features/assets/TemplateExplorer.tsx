@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLayerStore } from '../../store/useLayerStore';
 import { useTemplateStore, type TemplateListItem } from '../../store/useTemplateStore';
+import { importIllustratorSvg, IllustratorImportValidationError } from '../packages/illustratorSvgImporter';
+import { loadVortexPackage } from '../packages/loadVortexPackage';
 
 const iconBtn = 'h-8 w-8 rounded border border-slate-700 bg-slate-900 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50';
 
@@ -11,6 +13,7 @@ export function TemplateExplorer() {
   const loadTemplate = useLayerStore((s) => s.loadTemplate);
   const [currentFolderId, setCurrentFolderId] = useState(templateStore.rootId);
   const [query, setQuery] = useState('');
+  const [importStatus, setImportStatus] = useState<string>('');
 
   const getFolder = (id: string) => templateStore.folders.find((f) => f.id === id);
 
@@ -70,6 +73,44 @@ export function TemplateExplorer() {
       <div className="rounded-lg border border-slate-800 bg-slate-950 p-3">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <input value={query} onChange={(e) => setQuery(e.target.value)} className="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1" placeholder="Search templates" />
+          <label className="cursor-pointer rounded border border-violet-500/60 bg-violet-500/10 px-2 py-1 text-xs text-violet-200 hover:bg-violet-500/20" title="Import Illustrator SVG">
+            Import SVG
+            <input
+              type="file"
+              accept=".svg,image/svg+xml"
+              className="hidden"
+              onChange={async (event) => {
+                const file = event.target.files?.[0];
+                event.currentTarget.value = '';
+                if (!file) return;
+
+                try {
+                  const svgText = await file.text();
+                  const result = await importIllustratorSvg(svgText, file.name.replace(/\.svg$/i, ''));
+                  const vortexFile = new File([result.packageBlob], `${result.manifest.templateName}.vortex`, {
+                    type: 'application/vnd.vortex.template+zip',
+                  });
+                  const loaded = await loadVortexPackage(vortexFile);
+                  templateStore.registerVortexPackage(loaded);
+
+                  const downloadUrl = URL.createObjectURL(result.packageBlob);
+                  const link = document.createElement('a');
+                  link.href = downloadUrl;
+                  link.download = `${result.manifest.templateName}.vortex`;
+                  link.click();
+                  URL.revokeObjectURL(downloadUrl);
+
+                  const warningText = result.warnings.length ? ` (${result.warnings.length} warning${result.warnings.length === 1 ? '' : 's'})` : '';
+                  setImportStatus(`Imported ${file.name}${warningText}`);
+                } catch (error) {
+                  const message = error instanceof IllustratorImportValidationError || error instanceof Error
+                    ? error.message
+                    : 'Failed to import SVG';
+                  setImportStatus(`Import failed: ${message}`);
+                }
+              }}
+            />
+          </label>
           <button className={iconBtn} title="Create folder" onClick={() => {
             const name = window.prompt('Name this new folder')?.trim();
             if (name) templateStore.addFolder(name, currentFolderId);
@@ -78,6 +119,7 @@ export function TemplateExplorer() {
         </div>
 
         <div className="grid gap-2 text-sm">
+          {importStatus && <p className="text-xs text-slate-300">{importStatus}</p>}
           <div className="grid grid-cols-[1.6fr_0.8fr_1fr_1fr_auto_auto] text-slate-400"><span>Name</span><span>Type</span><span>Dimensions</span><span>Modified</span><span>Load</span><span>Delete</span></div>
           {templatesForDisplay.map((template) => {
             const isVortex = template.source === 'vortex';

@@ -7,6 +7,7 @@ import { TemplateSceneSvg } from '../features/playout/TemplateSceneSvg';
 import { sceneFromVortexPackage } from '../features/packages/vortexSceneAdapter';
 import { getVortexAssetUrl } from '../features/packages/vortexAssetResolver';
 import { type FontLoadResult, loadVortexFonts } from '../features/packages/vortexFontGate';
+import { getManifestFormat } from '../features/packages/loadVortexPackage';
 import { FontGateOverlay } from '../features/playout/FontGateOverlay';
 import { usePlayoutStore } from '../store/usePlayoutStore';
 import { applyBindingsToScene, normalizeBindingSchema } from '../features/playout/vortexBindings';
@@ -42,10 +43,11 @@ export function PublicTemplateRoute() {
       try {
         const scene = sceneFromVortexPackage(vortexPackage);
         const schema = normalizeBindingSchema(vortexPackage.bindings);
+        const format = getManifestFormat(vortexPackage.manifest);
         return {
           source: 'vortex' as const,
           packageRef: vortexPackage,
-          formatLabel: `${vortexPackage.manifest.format.formatId} · ${scene.canvas.width} × ${scene.canvas.height}`,
+          formatLabel: `${format.formatId} · ${scene.canvas.width} × ${scene.canvas.height}`,
           schema,
           template: {
             id: vortexPackage.manifest.templateId,

@@ -1,5 +1,6 @@
 import type { Layer } from '../../types/domain';
 import type { VortexPackage } from './loadVortexPackage';
+import { getManifestFormat } from './loadVortexPackage';
 
 export type AdaptedVortexScene = {
   canvas: {
@@ -76,8 +77,7 @@ const mapLayer = (rawLayer: unknown, index: number): Layer => {
 };
 
 export function sceneFromVortexPackage(pkg: VortexPackage): AdaptedVortexScene {
-  const width = pkg.manifest.format.width;
-  const height = pkg.manifest.format.height;
+  const { width, height } = getManifestFormat(pkg.manifest);
 
   if (!Number.isFinite(width) || !Number.isFinite(height)) {
     throw new Error('Invalid canvas format in package manifest.');

@@ -9,6 +9,12 @@ export interface ManifestV1 {
     height: number;
     formatId: string;
     [key: string]: unknown;
+  } | string;
+  formatDetail?: {
+    width: number;
+    height: number;
+    formatId: string;
+    [key: string]: unknown;
   };
   [key: string]: unknown;
 }
@@ -26,6 +32,26 @@ export interface VortexPackage {
     checksums?: any;
   };
 }
+
+export const getManifestFormat = (manifest: ManifestV1): { width: number; height: number; formatId: string } => {
+  if (typeof manifest.format === 'object' && manifest.format) {
+    return {
+      width: manifest.format.width,
+      height: manifest.format.height,
+      formatId: manifest.format.formatId,
+    };
+  }
+
+  if (manifest.formatDetail) {
+    return {
+      width: manifest.formatDetail.width,
+      height: manifest.formatDetail.height,
+      formatId: manifest.formatDetail.formatId,
+    };
+  }
+
+  throw new VortexPackageError('Invalid manifest.json: missing format object');
+};
 
 interface ZipEntry {
   name: string;
@@ -224,11 +250,15 @@ function assertManifest(manifest: unknown): asserts manifest is ManifestV1 {
     throw new VortexPackageError('Invalid manifest.json: missing templateName');
   }
 
-  if (!value.format || typeof value.format !== 'object') {
+  const format = (typeof value.format === 'object' && value.format !== null
+    ? value.format
+    : typeof value.formatDetail === 'object' && value.formatDetail !== null
+      ? value.formatDetail
+      : null) as Record<string, unknown> | null;
+
+  if (!format) {
     throw new VortexPackageError('Invalid manifest.json: missing format object');
   }
-
-  const format = value.format as Record<string, unknown>;
 
   if (typeof format.width !== 'number') {
     throw new VortexPackageError('Invalid manifest.json: format.width must be a number');
@@ -240,6 +270,14 @@ function assertManifest(manifest: unknown): asserts manifest is ManifestV1 {
 
   if (!format.formatId) {
     throw new VortexPackageError('Invalid manifest.json: missing format.formatId');
+  }
+
+  if (typeof value.format === 'string') {
+    value.format = {
+      width: format.width,
+      height: format.height,
+      formatId: format.formatId,
+    };
   }
 }
 
