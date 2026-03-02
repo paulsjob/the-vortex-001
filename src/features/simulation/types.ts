@@ -2,6 +2,8 @@ export type SportKey = 'mlb' | 'nba' | 'nfl' | 'nhl' | 'mls';
 
 export type HalfInning = 'top' | 'bottom';
 export type PitchType = 'FF' | 'SI' | 'SL' | 'CH' | 'CU';
+export type SimulationScenario = 'normal' | 'comeback' | 'shootout' | 'defensive-battle' | 'rivalry-chaos';
+export type SimulationTrigger = 'force-score' | 'force-turnover' | 'force-penalty' | 'force-big-play';
 
 export interface LastPitch {
   pitchNumber: number;
@@ -54,9 +56,14 @@ export interface SimulatorContext {
   randomInt: (min: number, max: number) => number;
 }
 
+export interface StepControl {
+  scenario: SimulationScenario;
+  trigger: SimulationTrigger | null;
+}
+
 export interface SimulatorPlugin {
   key: SportKey;
   label: string;
   createInitialGame: () => GameState;
-  step: (game: GameState, ctx: SimulatorContext) => { game: GameState; event: SimulationEvent };
+  step: (game: GameState, ctx: SimulatorContext, control: StepControl) => { game: GameState; event: SimulationEvent };
 }

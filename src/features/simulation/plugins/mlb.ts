@@ -8,9 +8,10 @@ const pitcherHome = 'T. Kim';
 
 let awayIndex = 0;
 let homeIndex = 0;
+let lastResult = "";
 
 const randomPitchType = (random: () => number): PitchType => {
-  const bag: PitchType[] = ['FF', 'SI', 'SL', 'CH', 'CU'];
+  const bag: PitchType[] = ['FF', 'FF', 'SI', 'SL', 'SL', 'CH', 'CU'];
   return bag[Math.floor(random() * bag.length)];
 };
 
@@ -56,6 +57,7 @@ export const mlbSimulator: SimulatorPlugin = {
   createInitialGame: () => {
     awayIndex = 0;
     homeIndex = 0;
+    lastResult = "";
     return {
       sport: 'mlb',
       homeTeam: 'Home',
@@ -80,20 +82,25 @@ export const mlbSimulator: SimulatorPlugin = {
       lastPitch: createDefaultPitch(),
     };
   },
-  step: (previous, ctx) => {
+  step: (previous, ctx, control) => {
     const game = structuredClone(previous);
     const pitchType = randomPitchType(ctx.random);
     const velocityMph = ctx.randomInt(82, 100);
     const location = randomLocation(ctx.random);
 
-    const r = ctx.random();
+    let r = ctx.random();
+    if (control.trigger === "force-score") r = 0.95;
+    if (control.trigger === "force-turnover") r = 0.56;
+    if (control.trigger === "force-big-play") r = 0.9;
+    if (control.scenario === "defensive-battle") r = Math.min(r, 0.7);
+    if (control.scenario === "shootout") r = Math.max(r, 0.75);
     let result = '';
     let batSpeedMph: number | null = null;
     let exitVelocityMph: number | null = null;
     let launchAngleDeg: number | null = null;
     let projectedDistanceFt: number | null = null;
 
-    if (r < 0.30) {
+    if (r < 0.33) {
       game.balls += 1;
       result = 'Ball';
       if (game.balls >= 4) {
@@ -106,7 +113,7 @@ export const mlbSimulator: SimulatorPlugin = {
         game.batter = nextBatter(game.half);
         result = 'Walk';
       }
-    } else if (r < 0.58) {
+    } else if (r < 0.61) {
       game.strikes += 1;
       result = 'Strike';
       if (game.strikes >= 3) {
@@ -116,8 +123,8 @@ export const mlbSimulator: SimulatorPlugin = {
         game.batter = nextBatter(game.half);
         result = 'Strikeout';
       }
-    } else if (r < 0.67) {
-      result = game.strikes < 2 ? 'Foul' : 'Two-strike foul';
+    } else if (r < 0.74) {
+      result = game.strikes < 2 ? 'Foul ball off to the right side' : 'Two-strike foul stays alive';
       if (game.strikes < 2) game.strikes += 1;
     } else {
       batSpeedMph = ctx.randomInt(62, 85);
@@ -128,31 +135,31 @@ export const mlbSimulator: SimulatorPlugin = {
       const inPlay = ctx.random();
       if (inPlay < 0.35) {
         game.outs += 1;
-        result = 'Ball in play: Out';
+        result = ctx.random() < 0.5 ? 'Groundout to short' : 'Flyout to center';
       } else if (inPlay < 0.70) {
         const moved = advanceRunners(game, 1);
         Object.assign(game, { onFirst: moved.first, onSecond: moved.second, onThird: moved.third });
         if (game.half === 'top') game.scoreAway += moved.runs;
         else game.scoreHome += moved.runs;
-        result = 'Single';
+        result = ctx.random() < 0.5 ? 'Single through left side' : 'Line-drive single to center';
       } else if (inPlay < 0.84) {
         const moved = advanceRunners(game, 2);
         Object.assign(game, { onFirst: moved.first, onSecond: moved.second, onThird: moved.third });
         if (game.half === 'top') game.scoreAway += moved.runs;
         else game.scoreHome += moved.runs;
-        result = 'Double';
+        result = ctx.random() < 0.5 ? 'Double into the gap' : 'Double off the wall';
       } else if (inPlay < 0.91) {
         const moved = advanceRunners(game, 3);
         Object.assign(game, { onFirst: moved.first, onSecond: moved.second, onThird: moved.third });
         if (game.half === 'top') game.scoreAway += moved.runs;
         else game.scoreHome += moved.runs;
-        result = 'Triple';
+        result = 'Triple down the right-field line';
       } else {
         const moved = advanceRunners(game, 4);
         Object.assign(game, { onFirst: moved.first, onSecond: moved.second, onThird: moved.third });
         if (game.half === 'top') game.scoreAway += moved.runs;
         else game.scoreHome += moved.runs;
-        result = 'Home Run';
+        result = 'Home run to deep left';
       }
 
       game.balls = 0;
@@ -176,6 +183,8 @@ export const mlbSimulator: SimulatorPlugin = {
 
     game.period = game.inning;
     game.periodLabel = `${game.half === 'top' ? 'Top' : 'Bottom'} ${game.inning}`;
+    if (result === lastResult) result = `${result} (${game.balls}-${game.strikes}, ${game.outs} out)`;
+    lastResult = result;
     game.lastEvent = result;
     game.lastPitch = {
       pitchNumber: ctx.nextId(),

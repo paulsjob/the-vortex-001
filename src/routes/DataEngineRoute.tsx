@@ -1,11 +1,19 @@
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { simulatorOptions } from '../features/simulation/registry';
-import { Speed, useDataEngineStore } from '../store/useDataEngineStore';
+import { SimulationScenario, Speed, useDataEngineStore } from '../store/useDataEngineStore';
 
 const speedOptions: Array<{ label: string; value: Speed }> = [
   { label: 'Slow', value: 'slow' },
   { label: 'Normal', value: 'normal' },
   { label: 'Fast', value: 'fast' },
+];
+
+const scenarioOptions: Array<{ label: string; value: SimulationScenario }> = [
+  { label: 'Normal', value: 'normal' },
+  { label: 'Comeback', value: 'comeback' },
+  { label: 'Shootout', value: 'shootout' },
+  { label: 'Defensive Battle', value: 'defensive-battle' },
+  { label: 'Rivalry Chaos', value: 'rivalry-chaos' },
 ];
 
 const clockLabel = (seconds: number) => {
@@ -15,7 +23,7 @@ const clockLabel = (seconds: number) => {
 };
 
 export function DataEngineRoute() {
-  const { activeSport, game, history, running, speed, start, stop, reset, setSpeed, setSport, stepPitch } = useDataEngineStore();
+  const { activeSport, game, history, running, speed, scenario, start, stop, reset, setSpeed, setSport, setScenario, triggerDemo, stepPitch } = useDataEngineStore();
 
   const feeds = [
     { id: 'live-game', name: 'Live Game Feed', status: running ? 'connected' : 'disconnected' },
@@ -76,29 +84,9 @@ export function DataEngineRoute() {
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              onClick={start}
-              disabled={running}
-              className="rounded border border-emerald-700 bg-emerald-900/40 px-3 py-1.5 font-medium text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Start
-            </button>
-            <button
-              type="button"
-              onClick={stop}
-              disabled={!running}
-              className="rounded border border-amber-700 bg-amber-900/30 px-3 py-1.5 font-medium text-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Stop
-            </button>
-            <button
-              type="button"
-              onClick={reset}
-              className="rounded border border-slate-600 bg-slate-800 px-3 py-1.5 font-medium text-slate-200"
-            >
-              Restart
-            </button>
+            <button type="button" onClick={start} disabled={running} className="rounded border border-emerald-700 bg-emerald-900/40 px-3 py-1.5 font-medium text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50">Start</button>
+            <button type="button" onClick={stop} disabled={!running} className="rounded border border-amber-700 bg-amber-900/30 px-3 py-1.5 font-medium text-amber-200 disabled:cursor-not-allowed disabled:opacity-50">Stop</button>
+            <button type="button" onClick={reset} className="rounded border border-slate-600 bg-slate-800 px-3 py-1.5 font-medium text-slate-200">Restart</button>
             <div className="ml-2 flex items-center gap-1 rounded border border-slate-700 bg-slate-950 p-1">
               {speedOptions.map((option) => (
                 <button
@@ -113,22 +101,26 @@ export function DataEngineRoute() {
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              onClick={stepPitch}
-              disabled={running}
-              className="rounded border border-indigo-700 bg-indigo-900/40 px-3 py-1.5 font-medium text-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+            <select
+              value={scenario}
+              onChange={(event) => setScenario(event.target.value as SimulationScenario)}
+              className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200"
             >
-              Step
-            </button>
+              {scenarioOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+            <button type="button" onClick={() => triggerDemo('force-score')} className="rounded border border-emerald-700 bg-emerald-900/20 px-2 py-1 text-xs font-medium text-emerald-200">Force Score</button>
+            <button type="button" onClick={() => triggerDemo('force-turnover')} className="rounded border border-rose-700 bg-rose-900/20 px-2 py-1 text-xs font-medium text-rose-200">Force Turnover</button>
+            <button type="button" onClick={() => triggerDemo('force-penalty')} className="rounded border border-yellow-700 bg-yellow-900/20 px-2 py-1 text-xs font-medium text-yellow-200">Force Penalty</button>
+            <button type="button" onClick={() => triggerDemo('force-big-play')} className="rounded border border-sky-700 bg-sky-900/20 px-2 py-1 text-xs font-medium text-sky-200">Force Big Play</button>
+            <button type="button" onClick={stepPitch} disabled={running} className="rounded border border-indigo-700 bg-indigo-900/40 px-3 py-1.5 font-medium text-indigo-200 disabled:cursor-not-allowed disabled:opacity-50">Step</button>
           </div>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           <div className="rounded border border-slate-700 bg-slate-900 p-3 text-sm">
             <p className="text-slate-400">Game Snapshot</p>
-            <p className="font-semibold text-slate-100">
-              {game.awayTeam} {game.scoreAway} - {game.homeTeam} {game.scoreHome}
-            </p>
+            <p className="font-semibold text-slate-100">{game.awayTeam} {game.scoreAway} - {game.homeTeam} {game.scoreHome}</p>
             <p className="mt-1 text-xs text-slate-300">{game.periodLabel} · {clockLabel(game.clockSeconds)}</p>
             <p className="mt-1 text-xs text-slate-500">{game.lastEvent}</p>
           </div>
