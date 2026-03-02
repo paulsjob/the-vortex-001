@@ -35,10 +35,10 @@ export function TemplatePreview({ template, sponsor, tone = 'preview' }: Props) 
             <span>16 × 9</span>
           </div>
         )}
-        <div className="flex min-h-0 flex-1 items-start justify-start">
-          <div className="relative w-full max-w-full">
+        <div className="flex min-h-0 flex-1 items-center justify-center">
+          <div className="relative h-full w-full">
             <div
-              className={`relative aspect-video h-auto w-full max-h-full max-w-full rounded-lg border bg-slate-950 ${isProgram ? 'border-red-600/70' : (sponsorStyle?.accentBorderClass ?? 'border-slate-700')}`}
+              className={`absolute inset-0 m-auto aspect-video w-full max-h-full max-w-full rounded-lg border bg-slate-950 ${isProgram ? 'border-red-600/70' : (sponsorStyle?.accentBorderClass ?? 'border-slate-700')}`}
             >
               <div className="absolute inset-0 bg-[linear-gradient(45deg,#0f172a_25%,#111827_25%,#111827_50%,#0f172a_50%,#0f172a_75%,#111827_75%,#111827_100%)] bg-[length:18px_18px] opacity-70" />
               {!isProgram && sponsorStyle && <div className={`absolute inset-0 bg-gradient-to-br ${sponsorStyle.accentFillClass} opacity-55`} />}

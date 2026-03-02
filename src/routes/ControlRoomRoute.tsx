@@ -244,13 +244,13 @@ export function ControlRoomRoute() {
             </div>
           </div>
         </div>
-        <div className="relative w-full aspect-video overflow-hidden rounded-md border border-slate-700 bg-slate-900">
+        <div className="relative flex flex-1 min-h-0 w-full items-center justify-center overflow-hidden rounded-md border border-slate-700 bg-slate-900 p-[clamp(16px,2vh,28px)]">
           {options.blackout && (
             <div className="pointer-events-none absolute inset-0 z-10 border border-slate-800 bg-black/95 text-center text-sm font-semibold uppercase tracking-[0.25em] text-white">
               <div className="flex h-full items-center justify-center">Blackout</div>
             </div>
           )}
-          <div className="h-full w-full p-3">
+          <div className="h-full w-full max-h-full max-w-full">
             <TemplatePreview template={options.template} sponsor={options.sponsor} tone={options.tone} />
           </div>
         </div>
