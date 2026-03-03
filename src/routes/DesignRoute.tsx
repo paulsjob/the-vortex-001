@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { createRoot } from 'react-dom/client';
 import { useAssetStore } from '../store/useAssetStore';
 import { useDataEngineStore } from '../store/useDataEngineStore';
 import { useLayerStore } from '../store/useLayerStore';
@@ -8,6 +9,7 @@ import { buildTemplateFeedUrl } from '../features/playout/publicUrl';
 import { buildNormalizedPayload, buildTeamMetrics } from '../features/simulation/derived';
 import { StageViewportFrame } from '../components/stage/StageViewportFrame';
 import { DataInspectorPanel } from '../components/design/DataInspectorPanel';
+import { TemplateSceneSvg } from '../features/playout/TemplateSceneSvg';
 import {
   formatPreviewValue,
   getFieldCatalog,
@@ -691,64 +693,93 @@ export function DesignRoute() {
   };
 
   const exportTemplateImage = async (format: 'jpg' | 'png') => {
-    const canvas = document.createElement('canvas');
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    if (format === 'jpg') {
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-    const sorted = [...layers].filter((layer) => layer.visible !== false).sort((a, b) => a.zIndex - b.zIndex);
-    for (const layer of sorted) {
-      ctx.save();
-      ctx.globalAlpha = layer.opacity / 100;
-      if (layer.kind === 'shape') {
-        ctx.fillStyle = layer.fill;
-        if (layer.shapeType === 'ellipse') {
-          ctx.beginPath();
-          ctx.ellipse(layer.x + layer.width / 2, layer.y + layer.height / 2, layer.width / 2, layer.height / 2, 0, 0, Math.PI * 2);
-          ctx.fill();
-        } else {
-          ctx.fillRect(layer.x, layer.y, layer.width, layer.height);
-        }
-      } else if (layer.kind === 'asset') {
-        const src = assetById.get(layer.assetId)?.src;
-        if (src) {
-          const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-            const el = new Image();
-            el.onload = () => resolve(el);
-            el.onerror = reject;
-            el.src = src;
-          });
-          ctx.drawImage(img, layer.x, layer.y, layer.width, layer.height);
-        }
-      } else {
-        ctx.fillStyle = layer.color;
-        ctx.font = `700 ${layer.size}px ${layer.fontFamily}`;
-        ctx.textAlign = layer.textAlign;
-        ctx.textBaseline = 'top';
-        ctx.fillText(getTextContent(layer), layer.x, layer.y);
+    const exportTemplate = {
+      id: loadedTemplateId ?? 'design-export-template',
+      name: templateName || loadedTemplate?.name || 'template',
+      canvasWidth,
+      canvasHeight,
+      layers: structuredClone(layers),
+    };
+
+    const offscreenContainer = document.createElement('div');
+    offscreenContainer.style.position = 'fixed';
+    offscreenContainer.style.left = '-99999px';
+    offscreenContainer.style.top = '0';
+    offscreenContainer.style.width = `${canvasWidth}px`;
+    offscreenContainer.style.height = `${canvasHeight}px`;
+    offscreenContainer.style.pointerEvents = 'none';
+    offscreenContainer.style.opacity = '0';
+    document.body.appendChild(offscreenContainer);
+
+    const root = createRoot(offscreenContainer);
+    try {
+      root.render(
+        <TemplateSceneSvg
+          template={exportTemplate}
+          className="h-full w-full"
+        />,
+      );
+
+      await document.fonts.ready;
+      await new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined)));
+
+      const svgElement = offscreenContainer.querySelector('svg');
+      if (!svgElement) {
+        setSaveNotice('Export failed: render surface unavailable.');
+        return;
       }
-      ctx.restore();
+
+      svgElement.setAttribute('width', String(canvasWidth));
+      svgElement.setAttribute('height', String(canvasHeight));
+      const serializedSvg = new XMLSerializer().serializeToString(svgElement);
+      const svgBlob = new Blob([serializedSvg], { type: 'image/svg+xml;charset=utf-8' });
+      const svgUrl = URL.createObjectURL(svgBlob);
+
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = svgUrl;
+      });
+      URL.revokeObjectURL(svgUrl);
+
+      const canvas = document.createElement('canvas');
+      // Export always targets template-native resolution independent of UI zoom / DPR.
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        setSaveNotice('Export failed: canvas unavailable.');
+        return;
+      }
+
+      if (format === 'jpg') {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+      const mime = format === 'jpg' ? 'image/jpeg' : 'image/png';
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob((nextBlob) => resolve(nextBlob), mime, 0.95);
+      });
+      if (!blob) {
+        setSaveNotice('Export failed: unable to serialize image.');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safeName = (templateName || loadedTemplate?.name || 'template').replace(/\s+/g, '-').toLowerCase();
+      a.href = url;
+      a.download = `${safeName}.${format === 'jpg' ? 'jpg' : 'png'}`;
+      a.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setSaveNotice(`Exported ${format.toUpperCase()} at ${canvasWidth}×${canvasHeight}.`);
+    } finally {
+      root.unmount();
+      offscreenContainer.remove();
     }
-    const mime = format === 'jpg' ? 'image/jpeg' : 'image/png';
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob((nextBlob) => resolve(nextBlob), mime, 0.95);
-    });
-    if (!blob) {
-      setSaveNotice('Export failed: unable to serialize image.');
-      return;
-    }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const safeName = (templateName || loadedTemplate?.name || 'template').replace(/\s+/g, '-').toLowerCase();
-    a.href = url;
-    a.download = `${safeName}.${format === 'jpg' ? 'jpg' : 'png'}`;
-    a.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setSaveNotice(`Exported ${format.toUpperCase()}.`);
   };
 
   const handleFormatSwitch = (nextFormatId: TemplateFormatId) => {

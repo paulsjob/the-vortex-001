@@ -26,6 +26,9 @@ const preloadRoutes = ['/control-room', '/output', '/data-engine'];
 export function AppRoutes() {
   const previewTemplate = usePlayoutStore((s) => s.previewTemplate);
   const programTemplate = usePlayoutStore((s) => s.programTemplate);
+  const previewSnapshot = usePlayoutStore((s) => s.previewSnapshot);
+  const programSnapshot = usePlayoutStore((s) => s.programSnapshot);
+  const outputSnapshotId = usePlayoutStore((s) => s.outputSnapshotId);
   const lastTakeAt = usePlayoutStore((s) => s.lastTakeAt);
   const takeToProgram = usePlayoutStore((s) => s.takeToProgram);
   const setPreviewTemplate = usePlayoutStore((s) => s.setPreviewTemplate);
@@ -37,6 +40,7 @@ export function AppRoutes() {
   const resetDemoSession = useDemoSessionStore((s) => s.resetDemoSession);
   const resetEngine = useDataEngineStore((s) => s.reset);
   const resetPlayoutState = usePlayoutStore((s) => s.resetPlayoutState);
+  const designTemplateId = selectedTemplate?.id ?? null;
 
   useEffect(() => {
     initializeSession();
@@ -129,6 +133,14 @@ export function AppRoutes() {
             >
               Reset Demo
             </button>
+            {import.meta.env.DEV && (
+              <div className="rounded-md border border-emerald-500/50 bg-emerald-950/70 px-3 py-2 text-[10px] font-mono leading-tight text-emerald-100">
+                <div>Design: {designTemplateId ?? 'null'}</div>
+                <div>Preview: {previewSnapshot?.snapshotId ?? 'null'}</div>
+                <div>Program: {programSnapshot?.snapshotId ?? 'null'}</div>
+                <div>Output: {outputSnapshotId ?? 'null'}</div>
+              </div>
+            )}
             <button
               className="rounded-md border border-red-500 bg-red-600 px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
               onClick={takeToProgram}

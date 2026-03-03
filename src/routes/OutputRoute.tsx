@@ -33,7 +33,8 @@ const mapDemoBindingDefaults = (
 export function OutputRoute() {
   const navigate = useNavigate();
   const templateStore = useTemplateStore();
-  const programTemplate = usePlayoutStore((s) => s.programTemplate);
+  const programSnapshot = usePlayoutStore((s) => s.programSnapshot);
+  const setOutputSnapshotId = usePlayoutStore((s) => s.setOutputSnapshotId);
   const fontOverrides = usePlayoutStore((s) => s.fontOverrides);
   const initializeBindings = usePlayoutStore((s) => s.initializeBindings);
   const getBindingState = usePlayoutStore((s) => s.getBindingState);
@@ -50,9 +51,9 @@ export function OutputRoute() {
   const [fontGateLoading, setFontGateLoading] = useState(false);
 
   const activeTemplateRef = useMemo(() => {
-    if (programTemplate) return { source: 'native' as const, id: programTemplate.id };
+    if (programSnapshot?.template) return { source: 'native' as const, id: programSnapshot.template.id };
     return selectedTemplate?.source === 'vortex' ? selectedTemplate : null;
-  }, [programTemplate, selectedTemplate]);
+  }, [programSnapshot, selectedTemplate]);
 
   const vortexRenderState = useMemo(() => {
     if (!activeTemplateRef || activeTemplateRef.source !== 'vortex') return null;
@@ -135,12 +136,17 @@ export function OutputRoute() {
   const vortexSchema = vortexRenderState && 'template' in vortexRenderState ? vortexRenderState.schema : undefined;
   const bindingState = vortexTemplate ? getBindingState(vortexTemplate.id) : undefined;
   const transformedVortexTemplate = vortexTemplate && vortexSchema ? applyBindingsToScene(vortexTemplate, vortexSchema, bindingState) : undefined;
-  const activeTemplate = transformedVortexTemplate || programTemplate;
+  const activeTemplate = transformedVortexTemplate || programSnapshot?.template;
   const override = vortexTemplate ? fontOverrides[vortexTemplate.id] : undefined;
+
+
+  useEffect(() => {
+    setOutputSnapshotId(programSnapshot?.snapshotId ?? null);
+    return () => setOutputSnapshotId(null);
+  }, [programSnapshot?.snapshotId, setOutputSnapshotId]);
 
   const shouldBlockForFonts = Boolean(vortexRenderState?.template && fontGateResult && !fontGateResult.ok && !override?.enabled);
   const shouldBlockForBindings = Boolean(vortexRenderState?.template && bindingState && !bindingState.readyToAir);
-  const missing = bindingState?.validation.missingRequired ?? [];
 
   return (
     <section className="relative h-screen overflow-hidden bg-slate-950 text-slate-100">
