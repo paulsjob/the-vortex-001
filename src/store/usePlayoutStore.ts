@@ -11,10 +11,20 @@ export type FontOverride = {
 
 export type TransitionType = 'cut' | 'fade' | 'ftb' | 'luma';
 
+export type PlayoutSnapshot = {
+  snapshotId: string;
+  template: SavedTemplate;
+  sponsor: string | null;
+  createdAt: string;
+};
+
 interface PlayoutStore {
   vortexBindings: Record<string, VortexBindingState | undefined>;
   previewTemplate: SavedTemplate | null;
   programTemplate: SavedTemplate | null;
+  previewSnapshot: PlayoutSnapshot | null;
+  programSnapshot: PlayoutSnapshot | null;
+  outputSnapshotId: string | null;
   previewSponsor: string | null;
   programSponsor: string | null;
   transitionType: TransitionType;
@@ -30,6 +40,7 @@ interface PlayoutStore {
   clearProgram: () => void;
   activateProgramTemplate: (template: SavedTemplate | null) => void;
   resetPlayoutState: () => void;
+  setOutputSnapshotId: (snapshotId: string | null) => void;
   setFontOverride: (templateId: string, override: FontOverride) => void;
   clearFontOverride: (templateId: string) => void;
 
@@ -44,6 +55,8 @@ interface PlayoutStore {
 }
 
 const cloneTemplate = (template: SavedTemplate): SavedTemplate => structuredClone(template);
+const createSnapshotId = () => `snap-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+const cloneSnapshotTemplate = (snapshot: PlayoutSnapshot): SavedTemplate => cloneTemplate(snapshot.template);
 
 const templatesMatch = (left: SavedTemplate | null, right: SavedTemplate | null): boolean => {
   if (!left || !right) return left === right;
@@ -56,40 +69,85 @@ export const usePlayoutStore = create<PlayoutStore>((set, get) => ({
   transitionType: 'cut',
   transitionDurationMs: 300,
   previewTemplate: null,
+  previewSnapshot: null,
   vortexBindings: {},
   programTemplate: null,
+  programSnapshot: null,
+  outputSnapshotId: null,
   lastTakeAt: null,
   fontOverrides: {},
   vortexBindingSchemas: {},
-  setPreviewTemplate: (template) => set({ previewTemplate: template ? cloneTemplate(template) : null }),
-  setPreviewSponsor: (sponsor) => set({ previewSponsor: sponsor }),
+  setPreviewTemplate: (template) => set((state) => {
+    if (!template) {
+      return { previewTemplate: null, previewSnapshot: null };
+    }
+    // Preview always works on an immutable snapshot cloned away from Design state.
+    const snapshot: PlayoutSnapshot = {
+      snapshotId: createSnapshotId(),
+      template: cloneTemplate(template),
+      sponsor: state.previewSponsor,
+      createdAt: new Date().toISOString(),
+    };
+    return {
+      previewTemplate: cloneSnapshotTemplate(snapshot),
+      previewSnapshot: snapshot,
+    };
+  }),
+  setPreviewSponsor: (sponsor) => set((state) => ({
+    previewSponsor: sponsor,
+    previewSnapshot: state.previewSnapshot
+      ? {
+        ...state.previewSnapshot,
+        sponsor,
+      }
+      : null,
+  })),
   setTransitionType: (type) => set({ transitionType: type }),
   setTransitionDurationMs: (ms) => set({ transitionDurationMs: ms }),
   takeToProgram: () => {
     const preview = get().previewTemplate;
     const program = get().programTemplate;
-    const previewSponsor = get().previewSponsor;
+    const previewSnapshot = get().previewSnapshot;
+    const previewSponsor = previewSnapshot?.sponsor ?? get().previewSponsor;
     if (!preview) return;
     if (templatesMatch(program, preview) && get().programSponsor === previewSponsor) return;
+    const programSnapshot: PlayoutSnapshot = {
+      snapshotId: createSnapshotId(),
+      template: cloneTemplate(preview),
+      sponsor: previewSponsor,
+      createdAt: new Date().toISOString(),
+    };
     set({
-      programTemplate: cloneTemplate(preview),
+      // TAKE creates a new Program snapshot to prevent shared mutable references.
+      programTemplate: cloneSnapshotTemplate(programSnapshot),
+      programSnapshot,
       programSponsor: previewSponsor,
       lastTakeAt: new Date().toISOString(),
     });
   },
-  clearProgram: () => set({ programTemplate: null, programSponsor: null }),
+  clearProgram: () => set({ programTemplate: null, programSnapshot: null, outputSnapshotId: null, programSponsor: null }),
   activateProgramTemplate: (template) => set((state) => {
     if (!template) return state;
-    const nextProgram = cloneTemplate(template);
+    const nextProgramSnapshot: PlayoutSnapshot = {
+      snapshotId: createSnapshotId(),
+      template: cloneTemplate(template),
+      sponsor: state.programSponsor,
+      createdAt: new Date().toISOString(),
+    };
+    const nextProgram = cloneSnapshotTemplate(nextProgramSnapshot);
     if (templatesMatch(state.programTemplate, nextProgram)) return state;
     return {
       programTemplate: nextProgram,
+      programSnapshot: nextProgramSnapshot,
       lastTakeAt: new Date().toISOString(),
     };
   }),
   resetPlayoutState: () => set({
     previewTemplate: null,
+    previewSnapshot: null,
     programTemplate: null,
+    programSnapshot: null,
+    outputSnapshotId: null,
     previewSponsor: 'Renderless Sports',
     programSponsor: null,
     transitionType: 'cut',
@@ -99,6 +157,7 @@ export const usePlayoutStore = create<PlayoutStore>((set, get) => ({
     vortexBindingSchemas: {},
     fontOverrides: {},
   }),
+  setOutputSnapshotId: (snapshotId) => set({ outputSnapshotId: snapshotId }),
   setFontOverride: (templateId, override) => set((state) => ({
     fontOverrides: { ...state.fontOverrides, [templateId]: override },
   })),
